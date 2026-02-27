@@ -44,6 +44,12 @@ Backend/API
   - Added webhook secret check via `x-webhook-secret`.
 - Implemented Ledger route:
   - POST /api/ledger/adjustments
+- Implemented Auth endpoints and session lifecycle:
+  - POST /api/auth/login
+  - POST /api/auth/mfa/verify
+  - POST /api/auth/refresh
+  - POST /api/auth/logout
+  - Added JWT-backed MFA token flow and refresh-token rotation/revocation via `admin_refresh_tokens` plus secure refresh cookie handling.
 
 Validation and Tests
 - Added unit tests for fee rule helpers in `apps/api/src/services/fees.test.ts`:
@@ -61,11 +67,6 @@ Tooling and Build Stability
 - Updated contracts test script to pass when no tests are present.
 
 Still Pending (next milestones)
-- Auth endpoints and session lifecycle:
-  - POST /api/auth/login
-  - POST /api/auth/mfa/verify
-  - POST /api/auth/refresh
-  - POST /api/auth/logout
 - Frontend app (`apps/web`) scaffolding and wiring to API workflows.
 - Integration/E2E tests for full fee-change timeline and import->reconcile->ledger path.
 - Docker/runtime composition, backup/restore flow, and migration tooling workstreams.

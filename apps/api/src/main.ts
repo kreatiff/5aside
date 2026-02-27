@@ -1,8 +1,9 @@
-import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import jwt from "@fastify/jwt";
 import sensible from "@fastify/sensible";
 import {
   AdjustmentCreateSchema,
@@ -12,9 +13,12 @@ import {
   FeeUpdateSchema,
   GameCreateSchema,
   GameUpdateSchema,
+  LoginSchema,
+  MfaVerifySchema,
   PlayerAliasCreateSchema,
   PlayerCreateSchema,
   PlayerUpdateSchema,
+  RefreshSchema,
   ReconcileResolveSchema,
   WebhookAttendanceSchema,
   WebhookBankSchema
@@ -24,8 +28,28 @@ import { z } from "zod";
 import { env } from "./config.js";
 import { query, withTransaction } from "./db/helpers.js";
 import { pool } from "./db/pool.js";
+import { generateRefreshToken, hashToken, verifyPassword, verifyTotp } from "./services/auth.js";
 import { canEditGameFee, snapshotFeeForGame } from "./services/fees.js";
 import { insertLedgerEntry } from "./services/ledger.js";
+
+const REFRESH_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+
+type AccessTokenPayload = {
+  sub: string;
+  role: string;
+  kind: "access";
+};
+
+type MfaTokenPayload = {
+  sub: string;
+  kind: "mfa";
+};
+
+type AuthenticatedAdmin = {
+  id: string;
+  email: string;
+  role: string;
+};
 
 type PlayerRow = {
   id: string;
@@ -112,6 +136,45 @@ function assertWebhookSecret(request: FastifyRequest, reply: FastifyReply): void
   }
 }
 
+function setRefreshCookie(reply: FastifyReply, refreshToken: string): void {
+  reply.setCookie("refresh_token", refreshToken, {
+    path: "/",
+    sameSite: "lax",
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    maxAge: Math.floor(REFRESH_TOKEN_TTL_MS / 1000)
+  });
+}
+
+function clearRefreshCookie(reply: FastifyReply): void {
+  reply.clearCookie("refresh_token", { path: "/" });
+}
+
+async function issueSessionTokens(
+  app: FastifyInstance,
+  admin: AuthenticatedAdmin
+): Promise<{ accessToken: string; refreshToken: string }> {
+  const accessToken = await app.jwt.sign(
+    {
+      sub: admin.id,
+      role: admin.role,
+      kind: "access"
+    },
+    { expiresIn: "15m" }
+  );
+  const refreshToken = generateRefreshToken();
+  const refreshHash = hashToken(refreshToken);
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+
+  await query(
+    `INSERT INTO admin_refresh_tokens (admin_id, token_hash, expires_at)
+     VALUES ($1, $2, $3)`,
+    [admin.id, refreshHash, expiresAt.toISOString()]
+  );
+
+  return { accessToken, refreshToken };
+}
+
 export async function buildServer() {
   const app = Fastify({ logger: true });
 
@@ -121,8 +184,141 @@ export async function buildServer() {
     origin: env.NODE_ENV === "production" ? false : true,
     credentials: true
   });
+  await app.register(jwt, {
+    secret: env.JWT_ACCESS_SECRET
+  });
 
   app.get("/health", async () => ({ ok: true }));
+
+  app.post("/api/auth/login", async (request, reply) => {
+    const body = parseBody(reply, LoginSchema, request.body);
+    const result = await query<AuthenticatedAdmin & { password_hash: string; totp_secret_enc: string }>(
+      `SELECT id, email, role, password_hash, totp_secret_enc
+       FROM admins
+       WHERE email = $1`,
+      [body.email.toLowerCase()]
+    );
+
+    const admin = result.rows[0];
+    if (!admin) {
+      throw reply.unauthorized("Invalid credentials");
+    }
+
+    const isValidPassword = await verifyPassword(body.password, admin.password_hash);
+    if (!isValidPassword) {
+      throw reply.unauthorized("Invalid credentials");
+    }
+
+    const mfaToken = await app.jwt.sign(
+      {
+        sub: admin.id,
+        kind: "mfa"
+      },
+      { expiresIn: "5m" }
+    );
+
+    return {
+      mfaRequired: true,
+      mfaToken
+    };
+  });
+
+  app.post("/api/auth/mfa/verify", async (request, reply) => {
+    const body = parseBody(reply, MfaVerifySchema, request.body);
+
+    let mfaPayload: MfaTokenPayload;
+    try {
+      mfaPayload = (await app.jwt.verify(body.mfaToken)) as MfaTokenPayload;
+    } catch {
+      throw reply.unauthorized("Invalid MFA token");
+    }
+
+    if (mfaPayload.kind !== "mfa") {
+      throw reply.unauthorized("Invalid MFA token");
+    }
+
+    const result = await query<AuthenticatedAdmin & { totp_secret_enc: string }>(
+      `SELECT id, email, role, totp_secret_enc
+       FROM admins
+       WHERE id = $1`,
+      [mfaPayload.sub]
+    );
+    const admin = result.rows[0];
+    if (!admin) {
+      throw reply.unauthorized("Admin not found");
+    }
+
+    const validCode = verifyTotp(body.code, admin.totp_secret_enc);
+    if (!validCode) {
+      throw reply.unauthorized("Invalid MFA code");
+    }
+
+    const tokens = await issueSessionTokens(app, admin);
+    setRefreshCookie(reply, tokens.refreshToken);
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        role: admin.role
+      }
+    };
+  });
+
+  app.post("/api/auth/refresh", async (request, reply) => {
+    const body = parseBody(reply, RefreshSchema, request.body ?? {});
+    const cookieToken = request.cookies?.refresh_token;
+    const refreshToken = body.refreshToken ?? (typeof cookieToken === "string" ? cookieToken : undefined);
+
+    if (!refreshToken) {
+      throw reply.unauthorized("Missing refresh token");
+    }
+
+    const refreshHash = hashToken(refreshToken);
+    const tokenResult = await query<{ id: string; admin_id: string; expires_at: Date | string; revoked_at: Date | string | null }>(
+      `SELECT id, admin_id, expires_at, revoked_at
+       FROM admin_refresh_tokens
+       WHERE token_hash = $1`,
+      [refreshHash]
+    );
+    const tokenRow = tokenResult.rows[0];
+    if (!tokenRow || tokenRow.revoked_at !== null || new Date(tokenRow.expires_at).getTime() <= Date.now()) {
+      throw reply.unauthorized("Invalid refresh token");
+    }
+
+    const adminResult = await query<AuthenticatedAdmin>(
+      `SELECT id, email, role FROM admins WHERE id = $1`,
+      [tokenRow.admin_id]
+    );
+    const admin = adminResult.rows[0];
+    if (!admin) {
+      throw reply.unauthorized("Admin not found");
+    }
+
+    await query(`UPDATE admin_refresh_tokens SET revoked_at = NOW() WHERE id = $1`, [tokenRow.id]);
+    const tokens = await issueSessionTokens(app, admin);
+    setRefreshCookie(reply, tokens.refreshToken);
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken
+    };
+  });
+
+  app.post("/api/auth/logout", async (request, reply) => {
+    const body = parseBody(reply, RefreshSchema, request.body ?? {});
+    const cookieToken = request.cookies?.refresh_token;
+    const refreshToken = body.refreshToken ?? (typeof cookieToken === "string" ? cookieToken : undefined);
+
+    if (refreshToken) {
+      await query(`UPDATE admin_refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1`, [hashToken(refreshToken)]);
+    }
+
+    clearRefreshCookie(reply);
+    return { ok: true };
+  });
 
   app.get("/api/players", async () => {
     const result = await query<PlayerRow>(
