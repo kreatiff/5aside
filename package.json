@@ -1,0 +1,22 @@
+{
+  "name": "fiveaside",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:api": "npm run dev -w @fiveaside/api",
+    "dev:web": "npm run dev -w @fiveaside/web",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:init": "npm run db:init -w @fiveaside/api",
+    "db:migrate": "npm run db:migrate -w @fiveaside/api"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
