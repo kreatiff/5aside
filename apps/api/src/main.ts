@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import jwt from "@fastify/jwt";
 import sensible from "@fastify/sensible";
 
 import { env } from "./config.js";
@@ -27,6 +28,9 @@ export async function buildServer() {
   await app.register(cors, {
     origin: env.NODE_ENV === "production" ? false : true,
     credentials: true
+  });
+  await app.register(jwt, {
+    secret: env.JWT_ACCESS_SECRET
   });
 
   app.get("/health", async () => ({ ok: true }));
