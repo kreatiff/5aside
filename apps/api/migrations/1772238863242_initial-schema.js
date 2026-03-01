@@ -1,14 +1,14 @@
 /**
  * @type {import('node-pg-migrate').ColumnDefinitions | undefined}
  */
-exports.shorthands = undefined;
+export const shorthands = undefined;
 
 /**
  * @param pgm {import('node-pg-migrate').MigrationBuilder}
  * @param run {() => void | undefined}
  * @returns {Promise<void> | void}
  */
-exports.up = (pgm) => {
+export const up = (pgm) => {
   pgm.sql(`
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -152,7 +152,7 @@ ON CONFLICT (id) DO NOTHING;
  * @param run {() => void | undefined}
  * @returns {Promise<void> | void}
  */
-exports.down = (pgm) => {
+export const down = (pgm) => {
   pgm.sql(`
     DROP TABLE IF EXISTS reconciliation_queue CASCADE;
     DROP TABLE IF EXISTS imports CASCADE;
