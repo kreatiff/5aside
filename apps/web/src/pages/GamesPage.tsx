@@ -181,74 +181,83 @@ export const GamesPage = () => {
                   </td>
                 </tr>
               ) : (
-                data?.data?.map((game: any) => (
-                  <tr
-                    key={game.id}
-                    style={{
-                      borderBottom: "1px solid var(--border-color)",
-                      cursor: "pointer",
-                      transition: "background 0.2s",
-                    }}
-                    onClick={() => navigate(`/games/${game.id}`)}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor =
-                        "var(--bg-elevated)")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.backgroundColor = "transparent")
-                    }
-                  >
-                    <td style={{ padding: "12px 16px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          fontWeight: 500,
-                        }}
-                      >
-                        <CalendarIcon size={20} color="var(--primary)" />
-                        {game.game_date}
-                      </div>
-                    </td>
-                    <td style={{ padding: "12px 16px" }}>
-                      <span
-                        style={{
-                          padding: "4px 8px",
-                          borderRadius: "99px",
-                          fontSize: "0.75rem",
-                          fontWeight: 500,
-                          backgroundColor:
-                            game.status === "completed"
-                              ? "rgba(34, 197, 94, 0.1)"
-                              : "rgba(59, 130, 246, 0.1)",
-                          color:
-                            game.status === "completed"
-                              ? "var(--success)"
-                              : "var(--primary)",
-                        }}
-                      >
-                        {game.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px 16px", fontWeight: 500 }}>
-                      {formatCurrency(game.fee_cents)}
-                    </td>
-                    <td style={{ padding: "12px 16px" }}>
-                      {game.attendance_count || 0}
-                    </td>
-                    <td
+                data?.data?.map(
+                  (game: {
+                    id: string;
+                    gameDate: string;
+                    status: string;
+                    feeCents: number;
+                    attendanceCount?: number;
+                    source: string;
+                  }) => (
+                    <tr
+                      key={game.id}
                       style={{
-                        padding: "12px 16px",
-                        color: "var(--text-muted)",
-                        fontSize: "0.875rem",
-                        textTransform: "capitalize",
+                        borderBottom: "1px solid var(--border-color)",
+                        cursor: "pointer",
+                        transition: "background 0.2s",
                       }}
+                      onClick={() => navigate(`/games/${game.id}`)}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          "var(--bg-elevated)")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor = "transparent")
+                      }
                     >
-                      {game.source}
-                    </td>
-                  </tr>
-                ))
+                      <td style={{ padding: "12px 16px" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          <CalendarIcon size={20} color="var(--primary)" />
+                          {game.gameDate}
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 16px" }}>
+                        <span
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: "99px",
+                            fontSize: "0.75rem",
+                            fontWeight: 500,
+                            backgroundColor:
+                              game.status === "completed"
+                                ? "rgba(34, 197, 94, 0.1)"
+                                : "rgba(59, 130, 246, 0.1)",
+                            color:
+                              game.status === "completed"
+                                ? "var(--success)"
+                                : "var(--primary)",
+                          }}
+                        >
+                          {game.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: "12px 16px", fontWeight: 500 }}>
+                        {formatCurrency(game.feeCents)}
+                      </td>
+                      <td style={{ padding: "12px 16px" }}>
+                        {game.attendanceCount || 0}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 16px",
+                          color: "var(--text-muted)",
+                          fontSize: "0.875rem",
+                          textTransform: "capitalize",
+                        }}
+                      >
+                        {game.source}
+                      </td>
+                    </tr>
+                  ),
+                )
               )}
             </tbody>
           </table>

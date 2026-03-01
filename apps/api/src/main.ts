@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
-import jwt from "@fastify/jwt";
 import sensible from "@fastify/sensible";
 
 import { env } from "./config.js";
@@ -29,17 +28,14 @@ export async function buildServer() {
     origin: env.NODE_ENV === "production" ? false : true,
     credentials: true
   });
-  await app.register(jwt, {
-    secret: env.JWT_ACCESS_SECRET
-  });
 
   app.get("/health", async () => ({ ok: true }));
 
   await app.register(authPlugin);
+  
   await app.register(authRoutes);
   await app.register(dashboardRoutes);
   await app.register(adminRoutes);
-
   await app.register(playerRoutes);
   await app.register(gameRoutes);
   await app.register(settingsRoutes);

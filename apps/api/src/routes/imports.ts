@@ -2,11 +2,33 @@ import type { FastifyInstance } from "fastify";
 import { CsvBankUploadSchema, BankImportSchema, WebhookBankSchema, WebhookAttendanceSchema } from "@fiveaside/contracts";
 import { parseCsvLines, matchPlayerByAlias, isChargeableStatus } from "@fiveaside/recon";
 import { parseBody, assertWebhookSecret } from "../utils/request.js";
-import { withTransaction } from "../db/helpers.js";
+import { withTransaction, query } from "../db/helpers.js";
 import { processBankRows } from "../services/bank-import.js";
 import { insertLedgerEntry } from "../services/ledger.js";
 
 export async function importRoutes(app: FastifyInstance) {
+  app.get("/api/imports", { preHandler: [app.requireAuth] }, async (request) => {
+    const limit = Number((request.query as any).limit) || 20;
+    const { rows } = await query(
+      `SELECT id, source_type, mode, record_count, status, started_at, completed_at, error_summary
+       FROM imports
+       ORDER BY started_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return {
+      data: rows.map((r: any) => ({
+        id: r.id,
+        sourceType: r.source_type,
+        mode: r.mode,
+        recordCount: r.record_count,
+        status: r.status,
+        createdAt: r.started_at,
+        errorDetails: r.error_summary
+      }))
+    };
+  });
+
   app.post("/api/imports/bank-csv", { preHandler: [app.requireAuth] }, async (request, reply) => {
     const body = parseBody(reply, CsvBankUploadSchema, request.body);
     const rows = parseCsvLines(body.csv);

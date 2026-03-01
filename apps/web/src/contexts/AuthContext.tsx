@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const payload = JSON.parse(payloadStr);
         setAdmin({ id: payload.sub, email: payload.email, role: payload.role });
       }
-    } catch (err) {
+    } catch {
       setAccessToken(null);
       setAdmin(null);
     } finally {
@@ -85,10 +85,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAdmin({ id: payload.sub, email: payload.email, role: payload.role });
 
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
       return {
         success: false,
-        error: err.response?.data?.error || "Login failed",
+        error: e.response?.data?.error || "Login failed",
       };
     }
   };
@@ -100,10 +101,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const payload = JSON.parse(atob(data.accessToken.split(".")[1]));
       setAdmin({ id: payload.sub, email: payload.email, role: payload.role });
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
       return {
         success: false,
-        error: err.response?.data?.error || "MFA verification failed",
+        error: e.response?.data?.error || "MFA verification failed",
       };
     }
   };
@@ -133,6 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

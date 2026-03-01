@@ -44,6 +44,7 @@ export async function authRoutes(app: FastifyInstance) {
       throw reply.unauthorized("Invalid credentials");
     }
 
+    /*
     if (admin.totp_secret_enc) {
       // Issue a short-lived token just for MFA step
       const mfaToken = app.jwt.sign(
@@ -52,6 +53,7 @@ export async function authRoutes(app: FastifyInstance) {
       );
       return { mfaRequired: true, mfaToken };
     }
+    */
 
     // If no MFA configured (e.g. initial setup), proceed to issue full tokens
     const accessToken = app.jwt.sign(

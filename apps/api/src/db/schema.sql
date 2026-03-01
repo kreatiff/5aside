@@ -122,7 +122,8 @@ CREATE TABLE IF NOT EXISTS reconciliation_queue (
   reason TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'dismissed')),
   resolved_by UUID REFERENCES admins(id) ON DELETE SET NULL,
-  resolved_at TIMESTAMPTZ
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_aliases_normalized ON player_aliases(alias_normalized);

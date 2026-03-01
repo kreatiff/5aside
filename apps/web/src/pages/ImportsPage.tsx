@@ -37,16 +37,17 @@ export const ImportsPage = () => {
 
     try {
       const text = await file.text();
-      const { data } = await api.post("/imports/csv", { csvData: text });
+      const { data } = await api.post("/imports/bank-csv", { csv: text });
       setSuccess(
-        `Imported successfully. Processed ${data.processed} transactions.`,
+        `Imported successfully. Processed ${data.posted + data.queued} transactions (${data.posted} posted, ${data.queued} queued for reconciliation).`,
       );
       setFile(null);
       queryClient.invalidateQueries({ queryKey: ["imports"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to upload CSV");
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setError(e.response?.data?.error || "Failed to upload CSV");
     } finally {
       setUploading(false);
     }
@@ -303,61 +304,72 @@ export const ImportsPage = () => {
                     </td>
                   </tr>
                 ) : (
-                  data?.data?.map((imp: any) => (
-                    <tr
-                      key={imp.id}
-                      style={{ borderBottom: "1px solid var(--border-color)" }}
-                    >
-                      <td style={{ padding: "16px", fontSize: "0.875rem" }}>
-                        {new Date(imp.created_at).toLocaleString()}
-                      </td>
-                      <td
+                  data?.data?.map(
+                    (imp: {
+                      id: string;
+                      createdAt: string;
+                      sourceType: string;
+                      status: string;
+                      recordCount: number;
+                      errorDetails?: string;
+                    }) => (
+                      <tr
+                        key={imp.id}
                         style={{
-                          padding: "16px",
-                          textTransform: "capitalize",
-                          fontWeight: 500,
+                          borderBottom: "1px solid var(--border-color)",
                         }}
                       >
-                        {imp.source}
-                      </td>
-                      <td style={{ padding: "16px" }}>
-                        <div
+                        <td style={{ padding: "16px", fontSize: "0.875rem" }}>
+                          {new Date(imp.createdAt).toLocaleString()}
+                        </td>
+                        <td
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
+                            padding: "16px",
+                            textTransform: "capitalize",
+                            fontWeight: 500,
                           }}
                         >
-                          {imp.status === "success" ? (
-                            <CheckCircle size={16} color="var(--success)" />
-                          ) : (
-                            <XCircle size={16} color="var(--danger)" />
-                          )}
-                          <span
+                          {imp.sourceType}
+                        </td>
+                        <td style={{ padding: "16px" }}>
+                          <div
                             style={{
-                              fontSize: "0.875rem",
-                              color:
-                                imp.status === "success"
-                                  ? "var(--success)"
-                                  : "var(--danger)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
                             }}
                           >
-                            {imp.status}
-                          </span>
-                        </div>
-                      </td>
-                      <td
-                        style={{
-                          padding: "16px",
-                          fontSize: "0.875rem",
-                          color: "var(--text-muted)",
-                        }}
-                      >
-                        {imp.records_processed} processed
-                        {imp.error_details ? `: ${imp.error_details}` : ""}
-                      </td>
-                    </tr>
-                  ))
+                            {imp.status === "success" ? (
+                              <CheckCircle size={16} color="var(--success)" />
+                            ) : (
+                              <XCircle size={16} color="var(--danger)" />
+                            )}
+                            <span
+                              style={{
+                                fontSize: "0.875rem",
+                                color:
+                                  imp.status === "success"
+                                    ? "var(--success)"
+                                    : "var(--danger)",
+                              }}
+                            >
+                              {imp.status}
+                            </span>
+                          </div>
+                        </td>
+                        <td
+                          style={{
+                            padding: "16px",
+                            fontSize: "0.875rem",
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          {imp.recordCount} processed
+                          {imp.errorDetails ? `: ${imp.errorDetails}` : ""}
+                        </td>
+                      </tr>
+                    ),
+                  )
                 )}
               </tbody>
             </table>

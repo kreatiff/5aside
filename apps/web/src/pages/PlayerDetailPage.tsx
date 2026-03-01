@@ -3,6 +3,19 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { ArrowLeft, UserCircle, Plus } from "lucide-react";
 
+type PlayerDetails = {
+  id: string;
+  displayName: string;
+  createdAt: string;
+  currentBalanceCents: number;
+};
+
+type Alias = {
+  id: string;
+  aliasRaw: string;
+  sourceType: string;
+};
+
 export const PlayerDetailPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
@@ -10,16 +23,20 @@ export const PlayerDetailPage = () => {
   const { data: player, isLoading } = useQuery({
     queryKey: ["players", id],
     queryFn: async () => {
-      const { data } = await api.get(`/players/${id}`);
-      return data;
+      const { data } = await api.get<{ player: PlayerDetails }>(
+        `/players/${id}`,
+      );
+      return data.player;
     },
   });
 
   const { data: aliases, isLoading: loadingAliases } = useQuery({
     queryKey: ["players", id, "aliases"],
     queryFn: async () => {
-      const { data } = await api.get(`/players/${id}/aliases`);
-      return data;
+      const { data } = await api.get<{ aliases: Alias[] }>(
+        `/players/${id}/aliases`,
+      );
+      return data.aliases;
     },
   });
 
@@ -95,10 +112,10 @@ export const PlayerDetailPage = () => {
           <UserCircle size={48} color="var(--primary)" />
           <div>
             <h1 className="page-title" style={{ marginBottom: 0 }}>
-              {player.display_name}
+              {player.displayName}
             </h1>
             <p style={{ color: "var(--text-secondary)" }}>
-              Added {new Date(player.created_at).toLocaleDateString()}
+              Added {new Date(player.createdAt).toLocaleDateString()}
             </p>
           </div>
         </div>
@@ -112,12 +129,12 @@ export const PlayerDetailPage = () => {
               fontWeight: 700,
               textAlign: "right",
               color:
-                player.current_balance_cents > 0
+                player.currentBalanceCents > 0
                   ? "var(--warning)"
                   : "var(--text-primary)",
             }}
           >
-            {formatCurrency(player.current_balance_cents)}
+            {formatCurrency(player.currentBalanceCents)}
           </p>
         </div>
       </div>
@@ -161,7 +178,7 @@ export const PlayerDetailPage = () => {
             <div
               style={{ display: "flex", flexDirection: "column", gap: "8px" }}
             >
-              {aliases?.map((alias: any) => (
+              {aliases?.map((alias: Alias) => (
                 <div
                   key={alias.id}
                   style={{
@@ -173,7 +190,7 @@ export const PlayerDetailPage = () => {
                     border: "1px solid var(--border-color)",
                   }}
                 >
-                  <span style={{ fontWeight: 500 }}>{alias.alias_raw}</span>
+                  <span style={{ fontWeight: 500 }}>{alias.aliasRaw}</span>
                   <span
                     style={{
                       fontSize: "0.75rem",
@@ -181,7 +198,7 @@ export const PlayerDetailPage = () => {
                       textTransform: "uppercase",
                     }}
                   >
-                    {alias.source}
+                    {alias.sourceType}
                   </span>
                 </div>
               ))}
@@ -272,62 +289,70 @@ export const PlayerDetailPage = () => {
                     </td>
                   </tr>
                 ) : (
-                  ledger?.data?.map((entry: any) => (
-                    <tr
-                      key={entry.id}
-                      style={{ borderBottom: "1px solid var(--border-color)" }}
-                    >
-                      <td style={{ padding: "12px 8px", fontSize: "0.875rem" }}>
-                        {new Date(entry.created_at).toLocaleDateString()}
-                      </td>
-                      <td style={{ padding: "12px 8px" }}>
-                        <span
-                          style={{
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            fontSize: "0.75rem",
-                            textTransform: "uppercase",
-                            fontWeight: 600,
-                            backgroundColor:
-                              entry.type === "charge"
-                                ? "rgba(239, 68, 68, 0.1)"
-                                : entry.type === "payment"
-                                  ? "rgba(34, 197, 94, 0.1)"
-                                  : "rgba(148, 163, 184, 0.1)",
-                            color:
-                              entry.type === "charge"
-                                ? "var(--danger)"
-                                : entry.type === "payment"
-                                  ? "var(--success)"
-                                  : "var(--text-secondary)",
-                          }}
-                        >
-                          {entry.type}
-                        </span>
-                      </td>
-                      <td style={{ padding: "12px 8px", fontWeight: 500 }}>
-                        {entry.type === "charge"
-                          ? "+"
-                          : entry.type === "payment"
-                            ? "-"
-                            : ""}
-                        {formatCurrency(entry.amount_cents)}
-                      </td>
-                      <td
+                  ledger?.data?.map(
+                    (entry: {
+                      id: string;
+                      created_at: string;
+                      type: string;
+                      amount_cents: number;
+                      adjustment_reason?: string;
+                    }) => (
+                      <tr
+                        key={entry.id}
                         style={{
-                          padding: "12px 8px",
-                          fontSize: "0.875rem",
-                          color: "var(--text-muted)",
+                          borderBottom: "1px solid var(--border-color)",
                         }}
                       >
-                        {entry.type === "charge"
-                          ? "Game fee"
-                          : entry.type === "adjustment"
-                            ? entry.adjustment_reason
-                            : "Bank deposit"}
-                      </td>
-                    </tr>
-                  ))
+                        <td
+                          style={{ padding: "12px 8px", fontSize: "0.875rem" }}
+                        >
+                          {new Date(entry.created_at).toLocaleDateString()}
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          <span
+                            style={{
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontSize: "0.75rem",
+                              textTransform: "uppercase",
+                              fontWeight: 600,
+                              backgroundColor:
+                                entry.type === "charge"
+                                  ? "rgba(239, 68, 68, 0.1)"
+                                  : entry.type === "payment"
+                                    ? "rgba(34, 197, 94, 0.1)"
+                                    : "rgba(148, 163, 184, 0.1)",
+                              color:
+                                entry.type === "charge"
+                                  ? "var(--danger)"
+                                  : entry.type === "payment"
+                                    ? "var(--success)"
+                                    : "var(--text-secondary)",
+                            }}
+                          >
+                            {entry.type}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 8px", fontWeight: 500 }}>
+                          {entry.amount_cents >= 0 ? "+" : "-"}
+                          {formatCurrency(Math.abs(entry.amount_cents))}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 8px",
+                            fontSize: "0.875rem",
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          {entry.type === "charge"
+                            ? "Game fee"
+                            : entry.type === "adjustment"
+                              ? entry.adjustment_reason
+                              : "Bank deposit"}
+                        </td>
+                      </tr>
+                    ),
+                  )
                 )}
               </tbody>
             </table>

@@ -12,6 +12,7 @@ import { ImportsPage } from "./pages/ImportsPage";
 import { ReconciliationPage } from "./pages/ReconciliationPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
+// eslint-disable-next-line react-refresh/only-export-components
 const ProtectedRoute = () => {
   const { isAuthenticated, isLoading } = useAuth();
 

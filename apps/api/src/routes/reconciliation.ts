@@ -27,9 +27,10 @@ export async function reconciliationRoutes(app: FastifyInstance) {
       reason: string;
       status: "open" | "resolved" | "dismissed";
       resolved_by: string | null;
+      created_at: Date | string;
       resolved_at: Date | string | null;
     }>(
-      `SELECT id, item_type, source_record_id, payload, suggested_player_id, confidence, reason, status, resolved_by, resolved_at
+      `SELECT id, item_type, source_record_id, payload, suggested_player_id, confidence, reason, status, resolved_by, created_at, resolved_at
        FROM reconciliation_queue
        ORDER BY status ASC, confidence DESC, id ASC
        LIMIT $1 OFFSET $2`,
@@ -46,6 +47,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
         reason: row.reason,
         status: row.status,
         resolvedBy: row.resolved_by,
+        createdAt: toIso(row.created_at),
         resolvedAt: toIso(row.resolved_at)
       })),
       total,

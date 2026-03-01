@@ -179,6 +179,7 @@ export const ReconciliationPage = () => {
                   </td>
                 </tr>
               ) : (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 queue?.data?.map((item: any) => {
                   const payload = item.payload;
                   const isResolving = resolvingId === item.id;
@@ -201,7 +202,7 @@ export const ReconciliationPage = () => {
                           verticalAlign: "top",
                         }}
                       >
-                        {new Date(item.created_at).toLocaleDateString()}
+                        {new Date(item.createdAt).toLocaleDateString()}
                       </td>
                       <td style={{ padding: "16px", verticalAlign: "top" }}>
                         <span
@@ -211,24 +212,28 @@ export const ReconciliationPage = () => {
                             fontSize: "0.75rem",
                             fontWeight: 600,
                             backgroundColor:
-                              item.item_type === "attendance"
+                              item.itemType === "attendance"
                                 ? "rgba(59, 130, 246, 0.1)"
                                 : "rgba(34, 197, 94, 0.1)",
                             color:
-                              item.item_type === "attendance"
+                              item.itemType === "attendance"
                                 ? "var(--primary)"
                                 : "var(--success)",
                             textTransform: "uppercase",
                           }}
                         >
-                          {item.item_type}
+                          {item.itemType}
                         </span>
                       </td>
                       <td style={{ padding: "16px", verticalAlign: "top" }}>
-                        {item.item_type === "finance" ? (
+                        {item.itemType === "bank_transaction" ? (
                           <div>
                             <p style={{ fontWeight: 500, marginBottom: "4px" }}>
-                              {payload.name} ({payload.reference})
+                              {payload.descriptionRaw} (
+                              {payload.externalTxnId ||
+                                payload.sourceRef ||
+                                "Manual"}
+                              )
                             </p>
                             <p
                               style={{
@@ -236,13 +241,13 @@ export const ReconciliationPage = () => {
                                 fontWeight: 600,
                               }}
                             >
-                              {formatCurrency(payload.amount_cents)}
+                              {formatCurrency(payload.amountCents)}
                             </p>
                           </div>
                         ) : (
                           <div>
                             <p style={{ fontWeight: 500, marginBottom: "4px" }}>
-                              "{payload.aliasRaw}"
+                              "{payload.playerName}"
                             </p>
                             <p
                               style={{
@@ -256,16 +261,19 @@ export const ReconciliationPage = () => {
                         )}
                       </td>
                       <td style={{ padding: "16px", verticalAlign: "top" }}>
-                        {item.suggested_player_id ? (
+                        {item.suggestedPlayerId ? (
                           <div>
                             <Link
-                              to={`/players/${item.suggested_player_id}`}
+                              to={`/players/${item.suggestedPlayerId}`}
                               style={{
                                 fontWeight: 500,
                                 color: "var(--primary)",
                               }}
                             >
-                              {item.suggested_player_name || "Unknown Player"}
+                              {players?.find(
+                                (p: { id: string; displayName: string }) =>
+                                  p.id === item.suggestedPlayerId,
+                              )?.displayName || "Unknown Player"}
                             </Link>
                             <div
                               style={{
@@ -275,13 +283,13 @@ export const ReconciliationPage = () => {
                                 marginTop: "4px",
                                 fontSize: "0.75rem",
                                 color:
-                                  item.confidence_score > 0.8
+                                  item.confidence > 0.8
                                     ? "var(--success)"
                                     : "var(--warning)",
                               }}
                             >
                               <AlertCircle size={12} />
-                              {(item.confidence_score * 100).toFixed(0)}% Match
+                              {(item.confidence * 100).toFixed(0)}% Match
                             </div>
                           </div>
                         ) : (
@@ -329,11 +337,13 @@ export const ReconciliationPage = () => {
                               <option value="" disabled>
                                 Select Player...
                               </option>
-                              {players?.map((p: any) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.display_name}
-                                </option>
-                              ))}
+                              {players?.map(
+                                (p: { id: string; displayName: string }) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.displayName}
+                                  </option>
+                                ),
+                              )}
                             </select>
                             <button
                               className="btn btn-outline"
@@ -354,7 +364,7 @@ export const ReconciliationPage = () => {
                               justifyContent: "flex-end",
                             }}
                           >
-                            {item.suggested_player_id && (
+                            {item.suggestedPlayerId && (
                               <button
                                 className="btn btn-primary"
                                 style={{
@@ -366,7 +376,7 @@ export const ReconciliationPage = () => {
                                 onClick={() =>
                                   resolveMutation.mutate({
                                     id: item.id,
-                                    playerId: item.suggested_player_id,
+                                    playerId: item.suggestedPlayerId,
                                   })
                                 }
                                 title="Accept Suggestion"

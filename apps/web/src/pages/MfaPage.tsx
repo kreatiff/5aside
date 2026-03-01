@@ -40,7 +40,7 @@ export const MfaPage = () => {
       } else {
         setError(result.error || "Invalid MFA code");
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred");
     } finally {
       setLoading(false);

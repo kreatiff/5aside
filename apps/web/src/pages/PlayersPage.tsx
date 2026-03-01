@@ -12,11 +12,11 @@ import {
 
 type Player = {
   id: string;
-  display_name: string;
-  current_balance_cents: number;
+  displayName: string;
+  currentBalanceCents: number;
   active: boolean;
-  last_game_date: string | null;
-  created_at: string;
+  lastGameDate: string | null;
+  createdAt: string;
 };
 
 type PaginatedPlayers = {
@@ -56,7 +56,7 @@ export const PlayersPage = () => {
 
   const filteredPlayers = search
     ? data?.data.filter((p: Player) =>
-        p.display_name.toLowerCase().includes(search.toLowerCase()),
+        p.displayName.toLowerCase().includes(search.toLowerCase()),
       )
     : data?.data;
 
@@ -219,7 +219,7 @@ export const PlayersPage = () => {
                         }}
                       >
                         <UserCircle size={20} color="var(--text-muted)" />
-                        {player.display_name}
+                        {player.displayName}
                       </div>
                     </td>
                     <td style={{ padding: "12px 16px" }}>
@@ -245,14 +245,14 @@ export const PlayersPage = () => {
                         padding: "12px 16px",
                         fontWeight: 500,
                         color:
-                          player.current_balance_cents > 0
+                          player.currentBalanceCents > 0
                             ? "var(--warning)"
-                            : player.current_balance_cents < 0
+                            : player.currentBalanceCents < 0
                               ? "var(--success)"
                               : "var(--text-primary)",
                       }}
                     >
-                      {formatCurrency(player.current_balance_cents)}
+                      {formatCurrency(player.currentBalanceCents)}
                     </td>
                     <td
                       style={{
@@ -261,7 +261,7 @@ export const PlayersPage = () => {
                         fontSize: "0.875rem",
                       }}
                     >
-                      {player.last_game_date || "Never"}
+                      {player.lastGameDate || "Never"}
                     </td>
                   </tr>
                 ))

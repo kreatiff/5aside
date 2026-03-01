@@ -31,6 +31,7 @@ export const SettingsPage = () => {
 
   useEffect(() => {
     if (settings) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFeeInput((settings.current_game_fee_cents / 100).toString());
     }
   }, [settings]);
@@ -210,14 +211,24 @@ export const SettingsPage = () => {
                   <AlertTriangle size={20} /> Integrity Issues Detected
                 </div>
                 <ul style={{ fontSize: "0.875rem", paddingLeft: "24px" }}>
-                  {integrity?.issues?.map((issue: any, index: number) => (
-                    <li key={index}>
-                      Player {issue.playerId}: Cached{" "}
-                      {formatCurrency(issue.cachedBalance)}, Calculated{" "}
-                      {formatCurrency(issue.calculatedBalance)} (Diff:{" "}
-                      {formatCurrency(issue.difference)})
-                    </li>
-                  ))}
+                  {integrity?.issues?.map(
+                    (
+                      issue: {
+                        playerId: string;
+                        cachedBalance: number;
+                        calculatedBalance: number;
+                        difference: number;
+                      },
+                      index: number,
+                    ) => (
+                      <li key={index}>
+                        Player {issue.playerId}: Cached{" "}
+                        {formatCurrency(issue.cachedBalance)}, Calculated{" "}
+                        {formatCurrency(issue.calculatedBalance)} (Diff:{" "}
+                        {formatCurrency(issue.difference)})
+                      </li>
+                    ),
+                  )}
                 </ul>
               </div>
             )}

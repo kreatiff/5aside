@@ -15,15 +15,19 @@ export async function playerRoutes(app: FastifyInstance) {
     const countResult = await query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM players`);
     const total = Number(countResult.rows[0]?.count || 0);
 
-    const result = await query<PlayerRow>(
-      `SELECT id, display_name, active, current_balance_cents, notes, created_at, updated_at
-       FROM players
-       ORDER BY display_name ASC
+    const result = await query<PlayerRow & { last_game_date: string | null }>(
+      `SELECT p.id, p.display_name, p.active, p.current_balance_cents, p.notes, p.created_at, p.updated_at,
+              (SELECT MAX(g.game_date)::text FROM attendance a JOIN games g ON g.id = a.game_id WHERE a.player_id = p.id) AS last_game_date
+       FROM players p
+       ORDER BY p.display_name ASC
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
     return { 
-      data: result.rows.map(mapPlayer),
+      data: result.rows.map(row => ({
+        ...mapPlayer(row),
+        lastGameDate: row.last_game_date
+      })),
       total,
       limit,
       offset
@@ -110,7 +114,16 @@ export async function playerRoutes(app: FastifyInstance) {
        ORDER BY created_at DESC`,
       [id]
     );
-    return { aliases: result.rows };
+    return {
+      aliases: result.rows.map(r => ({
+        id: r.id,
+        playerId: r.player_id,
+        sourceType: r.source,
+        aliasRaw: r.alias_raw,
+        aliasNormalized: r.alias_normalized,
+        createdAt: r.created_at
+      }))
+    };
   });
 
   app.get("/api/players/:id/ledger", async (request, reply) => {

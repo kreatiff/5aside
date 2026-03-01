@@ -11,6 +11,21 @@ import {
   Save,
 } from "lucide-react";
 
+type GameDetails = {
+  id: string;
+  gameDate: string;
+  status: string;
+  source: string;
+  feeCents: number;
+  attendance: {
+    id: string;
+    playerId: string;
+    displayName: string;
+    sourceStatus: string;
+    chargeable: boolean;
+  }[];
+};
+
 export const GameDetailPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
@@ -21,8 +36,8 @@ export const GameDetailPage = () => {
   const { data: game, isLoading } = useQuery({
     queryKey: ["games", id],
     queryFn: async () => {
-      const { data } = await api.get(`/games/${id}`);
-      return data;
+      const { data } = await api.get<{ game: GameDetails }>(`/games/${id}`);
+      return data.game;
     },
   });
 
@@ -116,7 +131,7 @@ export const GameDetailPage = () => {
           </div>
           <div>
             <h1 className="page-title" style={{ marginBottom: "4px" }}>
-              Game on {game.game_date}
+              Game on {game.gameDate}
             </h1>
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <span
@@ -198,7 +213,7 @@ export const GameDetailPage = () => {
               }}
             >
               <span style={{ fontSize: "1.5rem", fontWeight: 700 }}>
-                {formatCurrency(game.fee_cents)}
+                {formatCurrency(game.feeCents)}
               </span>
               {game.status === "completed" ? (
                 <span title="Cannot edit completed game fee">
@@ -209,7 +224,7 @@ export const GameDetailPage = () => {
                   className="btn btn-outline"
                   style={{ padding: "4px" }}
                   onClick={() => {
-                    setFeeInput(game.fee_cents.toString());
+                    setFeeInput(game.feeCents.toString());
                     setIsEditingFee(true);
                   }}
                 >
@@ -315,40 +330,50 @@ export const GameDetailPage = () => {
                     </td>
                   </tr>
                 ) : (
-                  game.attendance?.map((att: any) => (
-                    <tr
-                      key={att.id}
-                      style={{ borderBottom: "1px solid var(--border-color)" }}
-                    >
-                      <td style={{ padding: "12px 8px", fontWeight: 500 }}>
-                        <Link
-                          to={`/players/${att.player_id}`}
-                          style={{ color: "var(--text-primary)" }}
-                        >
-                          {att.display_name}
-                        </Link>
-                      </td>
-                      <td
+                  game.attendance?.map(
+                    (att: {
+                      id: string;
+                      playerId: string;
+                      displayName: string;
+                      sourceStatus: string;
+                      chargeable: boolean;
+                    }) => (
+                      <tr
+                        key={att.id}
                         style={{
-                          padding: "12px 8px",
-                          textTransform: "capitalize",
+                          borderBottom: "1px solid var(--border-color)",
                         }}
                       >
-                        {att.source_status}
-                      </td>
-                      <td style={{ padding: "12px 8px" }}>
-                        <span
+                        <td style={{ padding: "12px 8px", fontWeight: 500 }}>
+                          <Link
+                            to={`/players/${att.playerId}`}
+                            style={{ color: "var(--text-primary)" }}
+                          >
+                            {att.displayName}
+                          </Link>
+                        </td>
+                        <td
                           style={{
-                            color: att.chargeable
-                              ? "var(--warning)"
-                              : "var(--text-muted)",
+                            padding: "12px 8px",
+                            textTransform: "capitalize",
                           }}
                         >
-                          {att.chargeable ? "Yes" : "No"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
+                          {att.sourceStatus}
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          <span
+                            style={{
+                              color: att.chargeable
+                                ? "var(--warning)"
+                                : "var(--text-muted)",
+                            }}
+                          >
+                            {att.chargeable ? "Yes" : "No"}
+                          </span>
+                        </td>
+                      </tr>
+                    ),
+                  )
                 )}
               </tbody>
             </table>

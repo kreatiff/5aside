@@ -17,15 +17,19 @@ export async function gameRoutes(app: FastifyInstance) {
     const countResult = await query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM games`);
     const total = Number(countResult.rows[0]?.count || 0);
 
-    const result = await query<GameRow>(
-      `SELECT id, external_event_id, game_date, kickoff_at_utc, fee_cents, source, status, created_at, updated_at
-       FROM games
-       ORDER BY game_date DESC, kickoff_at_utc DESC NULLS LAST
+    const result = await query<GameRow & { attendance_count: string }>(
+      `SELECT g.id, g.external_event_id, g.game_date, g.kickoff_at_utc, g.fee_cents, g.source, g.status, g.created_at, g.updated_at,
+              (SELECT COUNT(*)::text FROM attendance a WHERE a.game_id = g.id) AS attendance_count
+       FROM games g
+       ORDER BY g.game_date DESC, g.kickoff_at_utc DESC NULLS LAST
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
     return { 
-      data: result.rows.map(mapGame),
+      data: result.rows.map(row => ({
+        ...mapGame(row),
+        attendanceCount: Number(row.attendance_count)
+      })),
       total,
       limit,
       offset
@@ -64,7 +68,34 @@ export async function gameRoutes(app: FastifyInstance) {
     if (result.rowCount === 0) {
       throw reply.notFound("Game not found");
     }
-    return { game: mapGame(result.rows[0]!) };
+
+    const attendanceResult = await query<{
+      id: string;
+      player_id: string;
+      display_name: string;
+      source_status: string;
+      chargeable: boolean;
+    }>(
+      `SELECT a.id, a.player_id, p.display_name, a.source_status, a.chargeable
+       FROM attendance a
+       JOIN players p ON p.id = a.player_id
+       WHERE a.game_id = $1
+       ORDER BY p.display_name ASC`,
+      [id]
+    );
+
+    const gameData = {
+      ...mapGame(result.rows[0]!),
+      attendance: attendanceResult.rows.map(row => ({
+        id: row.id,
+        playerId: row.player_id,
+        displayName: row.display_name,
+        sourceStatus: row.source_status,
+        chargeable: row.chargeable
+      }))
+    };
+
+    return { game: gameData };
   });
 
   app.patch("/api/games/:id", async (request, reply) => {

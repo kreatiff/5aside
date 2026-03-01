@@ -39,28 +39,30 @@ export const DashboardPage = () => {
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ["dashboard", "summary"],
     queryFn: async () => {
-      const { data } = await api.get<SummaryData>("/dashboard/summary");
-      return data;
+      const { data } = await api.get<{ summary: SummaryData }>(
+        "/dashboard/summary",
+      );
+      return data.summary;
     },
   });
 
   const { data: finance, isLoading: loadingFinance } = useQuery({
     queryKey: ["dashboard", "finance"],
     queryFn: async () => {
-      const { data } = await api.get<FinanceData[]>(
+      const { data } = await api.get<{ finance: FinanceData[] }>(
         "/dashboard/finance?months=6",
       );
-      return data;
+      return data.finance;
     },
   });
 
   const { data: attendance, isLoading: loadingAttendance } = useQuery({
     queryKey: ["dashboard", "attendance"],
     queryFn: async () => {
-      const { data } = await api.get<AttendanceData[]>(
+      const { data } = await api.get<{ attendance: AttendanceData[] }>(
         "/dashboard/attendance?limit=10",
       );
-      return data.reverse(); // chronological for charts
+      return data.attendance;
     },
   });
 

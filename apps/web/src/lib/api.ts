@@ -60,7 +60,7 @@ api.interceptors.response.use(
           // Optional: trigger custom event if we want components to know they were logged out
           window.dispatchEvent(new Event("unauthorized"));
         }
-      } catch (err) {
+      } catch {
         setAccessToken(null);
       }
     }

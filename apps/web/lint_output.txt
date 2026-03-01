@@ -1,0 +1,61 @@
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\contexts\AuthContext.tsx[24m[0m
+[0m   [2m58:14[22m  [31merror[39m  'err' is defined but never used                                                                                                 [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m   [2m88:19[22m  [31merror[39m  Unexpected any. Specify a different type                                                                                        [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m103:19[22m  [31merror[39m  Unexpected any. Specify a different type                                                                                        [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m136:14[22m  [31merror[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\lib\api.ts[24m[0m
+[0m  [2m63:16[22m  [31merror[39m  'err' is defined but never used  [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\pages\GameDetailPage.tsx[24m[0m
+[0m  [2m318:46[22m  [31merror[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\pages\GamesPage.tsx[24m[0m
+[0m  [2m184:40[22m  [31merror[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\pages\ImportsPage.tsx[24m[0m
+[0m   [2m48:19[22m  [31merror[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m306:41[22m  [31merror[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\pages\LoginPage.tsx[24m[0m
+[0m  [2m32:14[22m  [31merror[39m  'err' is defined but never used  [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\pages\MfaPage.tsx[24m[0m
+[0m  [2m43:14[22m  [31merror[39m  'err' is defined but never used  [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\pages\PlayerDetailPage.tsx[24m[0m
+[0m  [2m164:37[22m  [31merror[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m275:45[22m  [31merror[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\pages\ReconciliationPage.tsx[24m[0m
+[0m  [2m182:41[22m  [31merror[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m332:49[22m  [31merror[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\pages\SettingsPage.tsx[24m[0m
+[0m   [2m34:7[22m   [31merror[39m  Error: Calling setState synchronously within an effect can trigger cascading renders[0m
+[0m[0m
+[0mEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:[0m
+[0m* Update external systems with the latest state from React.[0m
+[0m* Subscribe for updates from some external system, calling setState in a callback function when external state changes.[0m
+[0m[0m
+[0mCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).[0m
+[0m[0m
+[0mH:\dev\5aside\apps\web\src\pages\SettingsPage.tsx:34:7[0m
+[0m  32 |   useEffect(() => {[0m
+[0m  33 |     if (settings) {[0m
+[0m> 34 |       setFeeInput((settings.current_game_fee_cents / 100).toString());[0m
+[0m     |       ^^^^^^^^^^^ Avoid calling setState() directly within an effect[0m
+[0m  35 |     }[0m
+[0m  36 |   }, [settings]);[0m
+[0m  37 |  [2mreact-hooks/set-state-in-effect[22m[0m
+[0m  [2m213:51[22m  [31merror[39m  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\src\router.tsx[24m[0m
+[0m  [2m15:7[22m  [31merror[39m  Fast refresh only works when a file only exports components. Move your component(s) to a separate file  [2mreact-refresh/only-export-components[22m[0m
+[0m[0m
+[0m[4mH:\dev\5aside\apps\web\vite.config.ts[24m[0m
+[0m  [2m6:24[22m  [31merror[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m[0m
+[0m[31m[1m✖ 19 problems (19 errors, 0 warnings)[22m[39m[0m
+[0m[31m[1m[22m[39m[0m
