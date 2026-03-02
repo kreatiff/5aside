@@ -29,11 +29,11 @@ export async function processBankRows(client: PoolClient, rows: ProcessBankRowIn
     posted += 1;
     const bankTransactionId = inserted.rows[0]!.id;
     const match = matchPlayerByAlias(row.descriptionRaw, candidates);
-    if (!match.matched || !match.playerId) {
+    if (!match.matched) {
       await client.query(
-        `INSERT INTO reconciliation_queue (item_type, source_record_id, payload, confidence, reason)
-         VALUES ('bank_transaction', $1, $2::jsonb, $3, $4)`,
-        [bankTransactionId, JSON.stringify(row), match.confidence, match.reason]
+        `INSERT INTO reconciliation_queue (item_type, source_record_id, payload, suggested_player_id, confidence, reason)
+         VALUES ('bank_transaction', $1, $2::jsonb, $3, $4, $5)`,
+        [bankTransactionId, JSON.stringify(row), match.playerId, match.confidence, match.reason]
       );
       queued += 1;
       continue;
