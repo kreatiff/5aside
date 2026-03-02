@@ -178,6 +178,12 @@ export async function importRoutes(app: FastifyInstance) {
         }
       }
 
+      // Update game status from pending -> synced after successful attendance import
+      await client.query(
+        `UPDATE games SET status = 'synced' WHERE id = $1 AND status = 'pending'`,
+        [body.gameId]
+      );
+
       return { imported, charged, queued };
     });
 
