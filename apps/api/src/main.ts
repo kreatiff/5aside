@@ -1,9 +1,10 @@
 import Fastify from "fastify";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
+import staticFiles from "@fastify/static";
 
 import { env } from "./config.js";
 import { pool } from "./db/pool.js";
@@ -42,6 +43,17 @@ export async function buildServer() {
   await app.register(importRoutes);
   await app.register(reconciliationRoutes);
   await app.register(ledgerRoutes);
+
+  if (env.NODE_ENV === "production") {
+    const webDistPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");
+    await app.register(staticFiles, { root: webDistPath, wildcard: false });
+    app.setNotFoundHandler((_request, reply) => {
+      if (_request.url.startsWith("/api")) {
+        return reply.code(404).send({ statusCode: 404, error: "Not Found", message: "Route not found" });
+      }
+      return reply.sendFile("index.html");
+    });
+  }
 
   return app;
 }
