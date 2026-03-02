@@ -458,7 +458,7 @@ input[type="checkbox"] {
   transition: width var(--duration-slow) var(--ease-out-expo);
   position: relative;
   z-index: var(--z-sidebar);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .sidebar.collapsed {
@@ -676,8 +676,10 @@ input[type="checkbox"] {
 /* Main Content */
 .main-content {
   flex: 1;
+  min-width: 0;
   padding: var(--spacing-xl) var(--spacing-2xl);
   overflow-y: auto;
+  overflow-x: hidden;
   background-color: var(--bg-base);
 }
 
@@ -817,6 +819,40 @@ input[type="checkbox"] {
 
 .data-table-wrapper {
   overflow-x: auto;
+  min-width: 0;
+}
+
+/* Custom checkbox styling for dark theme */
+.data-table input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border: 1.5px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  position: relative;
+  transition: all var(--duration-fast) ease;
+  vertical-align: middle;
+}
+
+.data-table input[type="checkbox"]:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.data-table input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .data-table {
@@ -909,6 +945,7 @@ input[type="checkbox"] {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-md);
+  min-width: 0;
 }
 
 .stat-card {
@@ -1452,6 +1489,17 @@ input[type="checkbox"] {
   color: white;
 }
 
+.player-avatar,
+.player-avatar-sm,
+.player-avatar-lg {
+  border-radius: var(--border-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: white;
+}
+
 .player-avatar-sm {
   width: 32px;
   height: 32px;
@@ -1464,6 +1512,83 @@ input[type="checkbox"] {
   height: 56px;
   min-width: 56px;
   font-size: var(--font-xl);
+}
+
+/* ========================================================================
+   Merge Candidates (Player Detail)
+   ======================================================================== */
+
+.merge-candidates-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-xs);
+  max-height: 320px;
+  overflow-y: auto;
+  flex: 1;
+  padding: var(--spacing-sm);
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-sm);
+}
+
+.merge-candidate-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-xs);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+.merge-candidate-label:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.merge-candidate-label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border: 1.5px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  position: relative;
+  transition: all var(--duration-fast) ease;
+}
+
+.merge-candidate-label input[type="checkbox"]:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.merge-candidate-label input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.merge-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  align-self: flex-start;
+  min-width: 160px;
 }
 
 /* ========================================================================
@@ -1519,7 +1644,7 @@ input[type="checkbox"] {
 .flex-between {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /*justify-content: space-between;*/
 }
 
 .gap-sm { gap: var(--spacing-sm); }

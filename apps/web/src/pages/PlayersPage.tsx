@@ -107,15 +107,7 @@ export const PlayersPage = () => {
         sortable: true,
         sortValue: (p) => p.displayName.toLowerCase(),
         render: (player) => (
-          <div className="flex-between gap-sm">
-            <div
-              className="player-avatar-sm"
-              style={{ background: getAvatarColor(player.displayName) }}
-            >
-              {getInitials(player.displayName)}
-            </div>
-            <span className="truncate">{player.displayName}</span>
-          </div>
+          <div className="flex-between gap-sm">{player.displayName}</div>
         ),
       },
       {
@@ -125,10 +117,7 @@ export const PlayersPage = () => {
         sortValue: (p) => (p.active ? "Active" : "Inactive"),
         width: "120px",
         render: (player) => (
-          <StatusBadge
-            variant={player.active ? "success" : "neutral"}
-            dot
-          >
+          <StatusBadge variant={player.active ? "success" : "neutral"} dot>
             {player.active ? "Active" : "Inactive"}
           </StatusBadge>
         ),
@@ -140,7 +129,11 @@ export const PlayersPage = () => {
         sortValue: (p) => p.currentBalanceCents,
         width: "140px",
         render: (player) => (
-          <CurrencyDisplay cents={player.currentBalanceCents} size="sm" colorCode />
+          <CurrencyDisplay
+            cents={player.currentBalanceCents}
+            size="sm"
+            colorCode
+          />
         ),
       },
       {
@@ -251,7 +244,10 @@ export const PlayersPage = () => {
           }
           emptyAction={
             !search ? (
-              <button className="btn btn-primary mt-md" onClick={handleCreatePlayer}>
+              <button
+                className="btn btn-primary mt-md"
+                onClick={handleCreatePlayer}
+              >
                 <Plus size={16} /> Add Player
               </button>
             ) : undefined
