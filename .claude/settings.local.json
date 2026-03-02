@@ -7,7 +7,9 @@
       "Bash(npm install)",
       "Bash(npm run build)",
       "Bash(git add -A)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(curl -X POST http://192.168.1.71:4000/api/webhooks/facebook-attendance -H \"x-webhook-secret: amU5pu05a0QuG48khlXdIGuD2GqgJ9aoJSD1CNWnkvs\" -H \"Content-Type: application/json\" -d '{\"\"gameId\"\":\"\"test\"\",\"\"rows\"\":[]}')",
+      "Bash(curl -X POST http://192.168.1.71:4000/api/webhooks/facebook-attendance -H \"x-webhook-secret: amU5pu05a0QuG48khlXdIGuD2GqgJ9aoJSD1CNWnkvs\" -H \"Content-Type: application/json\" -d '{:*)"
     ]
   }
 }
