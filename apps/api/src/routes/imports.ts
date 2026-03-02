@@ -147,11 +147,11 @@ export async function importRoutes(app: FastifyInstance) {
 
       for (const row of body.rows) {
         const match = matchPlayerByAlias(row.playerName, candidates);
-        if (!match.matched || !match.playerId) {
+        if (!match.matched) {
           await client.query(
-            `INSERT INTO reconciliation_queue (item_type, source_record_id, payload, confidence, reason)
-             VALUES ('attendance', $1, $2::jsonb, $3, $4)`,
-            [body.gameId, JSON.stringify(row), match.confidence, match.reason]
+            `INSERT INTO reconciliation_queue (item_type, source_record_id, payload, suggested_player_id, confidence, reason)
+             VALUES ('attendance', $1, $2::jsonb, $3, $4, $5)`,
+            [body.gameId, JSON.stringify(row), match.playerId, match.confidence, match.reason]
           );
           queued += 1;
           continue;
