@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { GameCreateSchema, GameUpdateSchema, GameBatchCreateSchema, AttendanceImportSchema } from "@fiveaside/contracts";
+import { GameCreateSchema, GameUpdateSchema, GameBatchCreateSchema, GameBatchUpdateSchema, AttendanceImportSchema } from "@fiveaside/contracts";
 import { matchPlayerByAlias, isChargeableStatus, MatchCandidate } from "@fiveaside/recon";
 import { query, withTransaction } from "../db/helpers.js";
 import { mapGame, type GameRow } from "../utils/mappers.js";
@@ -112,6 +112,57 @@ export async function gameRoutes(app: FastifyInstance) {
         total: created.length,
         scheduled: created.filter(g => g.status === "scheduled").length,
         pending: created.filter(g => g.status === "pending").length,
+      }
+    };
+  });
+
+  app.patch("/api/games/batch", async (request, reply) => {
+    const body = parseBody(reply, GameBatchUpdateSchema, request.body);
+
+    const result = await withTransaction(async (client) => {
+      const updated: Array<{ gameId: string; success: boolean; reason?: string }> = [];
+
+      for (const gameId of body.gameIds) {
+        const gameResult = await client.query<GameRow>(
+          `SELECT ${GAME_COLS} FROM games WHERE id = $1 FOR UPDATE`,
+          [gameId]
+        );
+        if (gameResult.rowCount === 0) {
+          updated.push({ gameId, success: false, reason: "Game not found" });
+          continue;
+        }
+
+        const game = gameResult.rows[0]!;
+
+        // Check if fee can be edited
+        const charges = await client.query<{ count: string }>(
+          `SELECT COUNT(*)::text AS count FROM ledger_entries WHERE game_id = $1 AND type = 'charge'`,
+          [gameId]
+        );
+        const hasCharges = Number(charges.rows[0]!.count) > 0;
+
+        if (!canEditGameFee(hasCharges)) {
+          updated.push({ gameId, success: false, reason: "Game has charges or is synced/cancelled" });
+          continue;
+        }
+
+        // Update the game fee
+        await client.query(
+          `UPDATE games SET fee_cents = $1, updated_at = NOW() WHERE id = $2`,
+          [body.feeCents, gameId]
+        );
+        updated.push({ gameId, success: true });
+      }
+
+      return updated;
+    });
+
+    return {
+      updated: result,
+      summary: {
+        total: result.length,
+        successful: result.filter(r => r.success).length,
+        failed: result.filter(r => !r.success).length
       }
     };
   });

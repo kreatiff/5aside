@@ -80,6 +80,12 @@ export const GameBatchCreateSchema = z.object({
 });
 export type GameBatchCreateInput = z.infer<typeof GameBatchCreateSchema>;
 
+export const GameBatchUpdateSchema = z.object({
+  gameIds: z.array(z.string().uuid()).min(1),
+  feeCents: z.number().int().positive()
+});
+export type GameBatchUpdateInput = z.infer<typeof GameBatchUpdateSchema>;
+
 export const AttendanceImportRowSchema = z.object({
   playerName: z.string().min(1),
   sourceStatus: z.string(),

@@ -43,14 +43,29 @@ export async function playerRoutes(app: FastifyInstance) {
 
   app.post("/api/players", async (request, reply) => {
     const body = parseBody(reply, PlayerCreateSchema, request.body);
-    const result = await query<PlayerRow>(
-      `INSERT INTO players (display_name, active, notes)
-       VALUES ($1, $2, $3)
-       RETURNING id, display_name, active, current_balance_cents, notes, created_at, updated_at`,
-      [body.displayName, body.active ?? true, body.notes ?? null]
-    );
+    const result = await withTransaction(async (client) => {
+      // 1. Create the player
+      const playerResult = await client.query<PlayerRow>(
+        `INSERT INTO players (display_name, active, notes)
+         VALUES ($1, $2, $3)
+         RETURNING id, display_name, active, current_balance_cents, notes, created_at, updated_at`,
+        [body.displayName, body.active ?? true, body.notes ?? null]
+      );
+      const playerId = playerResult.rows[0]!.id;
+
+      // 2. Auto-create alias from display name
+      const aliasNormalized = body.displayName.toLowerCase().replace(/[^a-z0-9]/g, "");
+      await client.query(
+        `INSERT INTO player_aliases (player_id, source, alias_raw, alias_normalized)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (player_id, source, alias_normalized) DO NOTHING`,
+        [playerId, "system", body.displayName, aliasNormalized]
+      );
+
+      return playerResult.rows[0]!;
+    });
     reply.code(201);
-    return { player: mapPlayer(result.rows[0]!) };
+    return { player: mapPlayer(result) };
   });
 
   app.patch("/api/players/bulk-status", async (request, reply) => {
@@ -89,39 +104,65 @@ export async function playerRoutes(app: FastifyInstance) {
   app.patch("/api/players/:id", async (request, reply) => {
     const id = parseUuidParam(request, reply, "id");
     const body = parseBody(reply, PlayerUpdateSchema, request.body);
-    const updates: string[] = [];
-    const values: unknown[] = [];
-    let index = 1;
 
-    if (body.displayName !== undefined) {
-      updates.push(`display_name = $${index++}`);
-      values.push(body.displayName);
-    }
-    if (body.notes !== undefined) {
-      updates.push(`notes = $${index++}`);
-      values.push(body.notes);
-    }
-    if (body.active !== undefined) {
-      updates.push(`active = $${index++}`);
-      values.push(body.active);
-    }
+    const result = await withTransaction(async (client) => {
+      const updates: string[] = [];
+      const values: unknown[] = [];
+      let index = 1;
 
-    if (updates.length === 0) {
-      throw reply.badRequest("At least one field is required");
-    }
+      if (body.displayName !== undefined) {
+        updates.push(`display_name = $${index++}`);
+        values.push(body.displayName);
+      }
+      if (body.notes !== undefined) {
+        updates.push(`notes = $${index++}`);
+        values.push(body.notes);
+      }
+      if (body.active !== undefined) {
+        updates.push(`active = $${index++}`);
+        values.push(body.active);
+      }
 
-    values.push(id);
-    const result = await query<PlayerRow>(
-      `UPDATE players
-       SET ${updates.join(", ")}, updated_at = NOW()
-       WHERE id = $${index}
-       RETURNING id, display_name, active, current_balance_cents, notes, created_at, updated_at`,
-      values
-    );
-    if (result.rowCount === 0) {
+      if (updates.length === 0) {
+        throw reply.badRequest("At least one field is required");
+      }
+
+      values.push(id);
+      const playerResult = await client.query<PlayerRow>(
+        `UPDATE players
+         SET ${updates.join(", ")}, updated_at = NOW()
+         WHERE id = $${index}
+         RETURNING id, display_name, active, current_balance_cents, notes, created_at, updated_at`,
+        values
+      );
+      if (playerResult.rowCount === 0) {
+        throw reply.notFound("Player not found");
+      }
+
+      // If display name changed, update the system alias
+      if (body.displayName !== undefined) {
+        const aliasNormalized = body.displayName.toLowerCase().replace(/[^a-z0-9]/g, "");
+        // Delete old system alias if it exists
+        await client.query(
+          `DELETE FROM player_aliases WHERE player_id = $1 AND source = 'system'`,
+          [id]
+        );
+        // Create new system alias
+        await client.query(
+          `INSERT INTO player_aliases (player_id, source, alias_raw, alias_normalized)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (player_id, source, alias_normalized) DO NOTHING`,
+          [id, "system", body.displayName, aliasNormalized]
+        );
+      }
+
+      return playerResult.rows[0]!;
+    });
+
+    if (!result) {
       throw reply.notFound("Player not found");
     }
-    return { player: mapPlayer(result.rows[0]!) };
+    return { player: mapPlayer(result) };
   });
 
   app.get("/api/players/:id/aliases", async (request, reply) => {

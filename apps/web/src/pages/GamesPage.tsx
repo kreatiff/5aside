@@ -101,6 +101,11 @@ export const GamesPage = () => {
   const [batchFrequency, setBatchFrequency] = useState<BatchFrequency>("weekly");
   const [batchUrls, setBatchUrls] = useState("");
 
+  // Batch update state
+  const [selectedGameIds, setSelectedGameIds] = useState<Set<string>>(new Set());
+  const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
+  const [newBatchFee, setNewBatchFee] = useState("");
+
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { addToast } = useToast();
@@ -166,6 +171,34 @@ export const GamesPage = () => {
     },
   });
 
+  const batchUpdateMutation = useMutation({
+    mutationFn: async () => {
+      if (newBatchFee === "" || isNaN(Number(newBatchFee))) return;
+      const { data } = await api.patch("/games/batch", {
+        gameIds: Array.from(selectedGameIds),
+        feeCents: Number(newBatchFee),
+      });
+      return data;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["games"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      const successful = result.updated.filter((r: any) => r.success).length;
+      const failed = result.updated.filter((r: any) => !r.success).length;
+      if (failed > 0) {
+        addToast("info", `Updated ${successful} games, ${failed} failed (locked or not found)`);
+      } else {
+        addToast("success", `Updated ${successful} games`);
+      }
+      setShowBatchUpdateModal(false);
+      setSelectedGameIds(new Set());
+      setNewBatchFee("");
+    },
+    onError: () => {
+      addToast("error", "Failed to update games");
+    },
+  });
+
   const handleCreateGame = () => {
     const defaultFee = settings?.current_game_fee_cents || 1000;
     setNewGameDate(new Date().toISOString().substring(0, 10));
@@ -188,7 +221,7 @@ export const GamesPage = () => {
     if (urls.length === 0 || !batchStartDate) return [];
 
     const today = new Date().toISOString().slice(0, 10);
-    const start = new Date(batchStartDate + "T00:00:00");
+    const start = new Date(batchStartDate + "T00:00:00Z");
 
     return urls.map((url, i) => {
       const d = new Date(start);
@@ -235,6 +268,18 @@ export const GamesPage = () => {
         title="Games"
         actions={
           <div className="flex-between gap-sm">
+            {selectedGameIds.size > 0 && (
+              <button
+                className="btn btn-warning"
+                onClick={() => {
+                  const defaultFee = settings?.current_game_fee_cents || 1500;
+                  setNewBatchFee(defaultFee.toString());
+                  setShowBatchUpdateModal(true);
+                }}
+              >
+                Update {selectedGameIds.size} Fee
+              </button>
+            )}
             <button className="btn btn-outline" onClick={() => setShowBatchModal(true)}>
               <Layers size={16} /> Batch Create
             </button>
@@ -251,6 +296,9 @@ export const GamesPage = () => {
         isLoading={isLoading}
         getRowId={(game) => game.id}
         onRowClick={(game) => navigate(`/games/${game.id}`)}
+        selectable={true}
+        selectedIds={selectedGameIds}
+        onSelectionChange={setSelectedGameIds}
         emptyIcon={<CalendarIcon size={48} />}
         emptyTitle="No games yet"
         emptyDescription="Create your first game to start tracking attendance and fees."
@@ -430,6 +478,48 @@ export const GamesPage = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Batch Update Fee Modal */}
+      <Modal
+        isOpen={showBatchUpdateModal}
+        title="Update Game Fees"
+        onClose={() => setShowBatchUpdateModal(false)}
+        size="sm"
+        footer={
+          <>
+            <button
+              className="btn btn-outline"
+              onClick={() => setShowBatchUpdateModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={newBatchFee === "" || isNaN(Number(newBatchFee)) || batchUpdateMutation.isPending}
+              onClick={() => batchUpdateMutation.mutate()}
+            >
+              {batchUpdateMutation.isPending ? "Updating..." : `Update ${selectedGameIds.size} Game${selectedGameIds.size !== 1 ? "s" : ""}`}
+            </button>
+          </>
+        }
+      >
+        <div className="form-group">
+          <label className="form-label">New Fee (in cents)</label>
+          <div className="input-group">
+            <span className="input-group__prefix">$</span>
+            <input
+              type="number"
+              className="input-field"
+              value={newBatchFee}
+              onChange={(e) => setNewBatchFee(e.target.value)}
+              placeholder="e.g. 1500"
+            />
+          </div>
+          <span className="form-hint">
+            Only games without charges or that are not synced will be updated. Other games will be skipped.
+          </span>
+        </div>
       </Modal>
     </>
   );
