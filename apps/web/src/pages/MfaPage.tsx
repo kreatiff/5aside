@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { motion } from "framer-motion";
+import { AlertCircle } from "lucide-react";
 
 export const MfaPage = () => {
   const [code, setCode] = useState("");
@@ -49,11 +51,17 @@ export const MfaPage = () => {
 
   return (
     <div className="auth-container">
-      <div className="auth-card">
+      <div className="auth-bg-orb auth-bg-orb--blue" />
+      <div className="auth-bg-orb auth-bg-orb--purple" />
+
+      <motion.div
+        className="auth-card"
+        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+      >
         <div className="auth-header">
-          <div className="logo-icon" style={{ margin: "0 auto 16px" }}>
-            5
-          </div>
+          <div className="logo-icon">5</div>
           <h1>Two-Factor Auth</h1>
           <p>Please enter the code from your authenticator app.</p>
         </div>
@@ -70,7 +78,7 @@ export const MfaPage = () => {
               pattern="[0-9]*"
               autoComplete="one-time-code"
               maxLength={6}
-              className="input-field"
+              className="input-field font-mono"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ""))}
               placeholder="000000"
@@ -86,18 +94,15 @@ export const MfaPage = () => {
           </div>
 
           {error && (
-            <p
-              className="error-text"
-              style={{ marginBottom: "16px", textAlign: "center" }}
-            >
-              {error}
-            </p>
+            <div className="auth-error">
+              <AlertCircle size={18} />
+              <span>{error}</span>
+            </div>
           )}
 
           <button
             type="submit"
-            className="btn btn-primary"
-            style={{ width: "100%", marginBottom: "12px" }}
+            className={`btn btn-primary${loading ? " btn-loading" : ""}`}
             disabled={loading || code.length < 6}
           >
             {loading ? "Verifying..." : "Verify Code"}
@@ -106,13 +111,12 @@ export const MfaPage = () => {
           <button
             type="button"
             className="btn btn-outline"
-            style={{ width: "100%" }}
             onClick={() => navigate("/login")}
           >
             Back to Login
           </button>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 };

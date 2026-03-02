@@ -1,9 +1,19 @@
-import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useState, useMemo } from "react";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { ArrowLeft, UserCircle, Plus } from "lucide-react";
+import { Plus, Receipt, UserX } from "lucide-react";
+import { PageHeader } from "../components/PageHeader";
+import { StatusBadge } from "../components/StatusBadge";
+import { CurrencyDisplay } from "../components/CurrencyDisplay";
+import { DataTable, type Column } from "../components/DataTable";
 import { Modal } from "../components/Modal";
+import { useToast } from "../contexts/ToastContext";
+import {
+  formatDateTime,
+  getInitials,
+  getAvatarColor,
+} from "../utils/format";
 
 type PlayerDetails = {
   id: string;
@@ -19,9 +29,32 @@ type Alias = {
   sourceType: string;
 };
 
+type LedgerEntry = {
+  id: string;
+  created_at: string;
+  type: string;
+  amount_cents: number;
+  adjustment_reason?: string;
+};
+
+function ledgerTypeBadgeVariant(
+  type: string,
+): "danger" | "success" | "neutral" {
+  if (type === "charge") return "danger";
+  if (type === "payment") return "success";
+  return "neutral";
+}
+
+function ledgerDetails(entry: LedgerEntry): string {
+  if (entry.type === "charge") return "Game fee";
+  if (entry.type === "adjustment") return entry.adjustment_reason ?? "";
+  return "Bank deposit";
+}
+
 export const PlayerDetailPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
+  const { addToast } = useToast();
   const [mergeSelection, setMergeSelection] = useState<string[]>([]);
   const [showConfirmMerge, setShowConfirmMerge] = useState(false);
   const [showAliasModal, setShowAliasModal] = useState(false);
@@ -77,6 +110,7 @@ export const PlayerDetailPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["players", id, "aliases"] });
+      addToast("success", "Alias added successfully");
     },
   });
 
@@ -84,8 +118,10 @@ export const PlayerDetailPage = () => {
     mutationFn: async (updates: Partial<PlayerDetails>) => {
       await api.patch(`/players/${id}`, updates);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["players", id] });
+      const newStatus = variables.active ? "active" : "inactive";
+      addToast("success", `Player marked as ${newStatus}`);
     },
   });
 
@@ -103,12 +139,9 @@ export const PlayerDetailPage = () => {
       queryClient.invalidateQueries({ queryKey: ["players"] });
       setMergeSelection([]);
       setShowConfirmMerge(false);
+      addToast("success", "Profiles merged successfully");
     },
   });
-
-  const handleAddAlias = () => {
-    setShowAliasModal(true);
-  };
 
   const submitAlias = () => {
     if (aliasInput.trim()) {
@@ -119,172 +152,137 @@ export const PlayerDetailPage = () => {
     }
   };
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(cents / 100);
-  };
+  const ledgerColumns: Column<LedgerEntry>[] = useMemo(
+    () => [
+      {
+        key: "date",
+        header: "Date",
+        sortable: true,
+        sortValue: (e) => new Date(e.created_at).getTime(),
+        render: (entry) => formatDateTime(entry.created_at),
+      },
+      {
+        key: "type",
+        header: "Type",
+        render: (entry) => (
+          <StatusBadge variant={ledgerTypeBadgeVariant(entry.type)}>
+            {entry.type}
+          </StatusBadge>
+        ),
+      },
+      {
+        key: "amount",
+        header: "Amount",
+        align: "right",
+        sortable: true,
+        sortValue: (e) => e.amount_cents,
+        render: (entry) => (
+          <CurrencyDisplay cents={entry.amount_cents} size="sm" />
+        ),
+      },
+      {
+        key: "details",
+        header: "Details",
+        render: (entry) => (
+          <span className="text-muted">{ledgerDetails(entry)}</span>
+        ),
+      },
+    ],
+    [],
+  );
 
-  if (isLoading)
-    return (
-      <div className="page-header">
-        <h1 className="page-title">Loading...</h1>
-      </div>
-    );
-  if (!player)
-    return (
-      <div className="page-header">
-        <h1 className="page-title">Player Not Found</h1>
-      </div>
-    );
+  const ledgerData: LedgerEntry[] = ledger?.data ?? [];
+
+  const mergeCandidates = allPlayers?.filter((p) => p.id !== id) ?? [];
+
+  if (isLoading) {
+    return <PageHeader title="Loading..." />;
+  }
+
+  if (!player) {
+    return <PageHeader title="Player Not Found" />;
+  }
 
   return (
     <>
-      <div style={{ marginBottom: "var(--spacing-md)" }}>
-        <Link
-          to="/players"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-            fontSize: "0.875rem",
-            color: "var(--text-muted)",
-          }}
-        >
-          <ArrowLeft size={16} /> Back to Players
-        </Link>
-      </div>
-
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <UserCircle
-            size={48}
-            color={player.active ? "var(--primary)" : "var(--text-muted)"}
-          />
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <h1 className="page-title" style={{ marginBottom: 0 }}>
-                {player.displayName}
-              </h1>
+      <PageHeader
+        title={player.displayName}
+        breadcrumbs={[
+          { label: "Players", to: "/players" },
+          { label: player.displayName },
+        ]}
+        description={`Added ${formatDateTime(player.createdAt)}`}
+        actions={
+          <div className="flex-between gap-md">
+            <div className="player-avatar-lg" style={{ background: getAvatarColor(player.displayName) }}>
+              {getInitials(player.displayName)}
+            </div>
+            <div>
+              <StatusBadge
+                variant={player.active ? "success" : "neutral"}
+                dot
+                pulse={player.active}
+              >
+                {player.active ? "Active" : "Inactive"}
+              </StatusBadge>
               <button
-                className={`btn btn-sm ${player.active ? "btn-outline" : "btn-secondary"}`}
-                style={{ padding: "4px 8px", fontSize: "0.75rem" }}
+                className="btn btn-ghost btn-sm"
                 onClick={() =>
                   updatePlayerMutation.mutate({ active: !player.active })
                 }
                 disabled={updatePlayerMutation.isPending}
               >
-                {player.active ? "Active" : "Inactive"}
+                {player.active ? "Deactivate" : "Activate"}
               </button>
             </div>
-            <p style={{ color: "var(--text-secondary)", marginTop: "4px" }}>
-              Added {new Date(player.createdAt).toLocaleDateString()}
-            </p>
+            <div>
+              <span className="text-muted">Current Balance</span>
+              <CurrencyDisplay
+                cents={player.currentBalanceCents}
+                size="xl"
+                colorCode
+                animated
+              />
+            </div>
           </div>
-        </div>
-        <div>
-          <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            Current Balance
-          </span>
-          <p
-            style={{
-              fontSize: "2rem",
-              fontWeight: 700,
-              textAlign: "right",
-              color:
-                player.currentBalanceCents > 0
-                  ? "var(--warning)"
-                  : "var(--text-primary)",
-            }}
-          >
-            {formatCurrency(player.currentBalanceCents)}
-          </p>
-        </div>
-      </div>
+        }
+      />
 
       {/* Merge Controls */}
-      <div
-        style={{
-          marginBottom: "var(--spacing-lg)",
-          padding: "16px",
-          backgroundColor: "var(--bg-base)",
-          border: "1px solid var(--border-color)",
-          borderRadius: "8px",
-        }}
-      >
-        <h4
-          style={{ marginBottom: "8px", fontSize: "0.875rem", fontWeight: 600 }}
-        >
-          Merge Duplicate Profiles
-        </h4>
-        <p
-          style={{
-            fontSize: "0.75rem",
-            color: "var(--text-muted)",
-            marginBottom: "12px",
-          }}
-        >
+      <div className="card mb-lg">
+        <div className="card-header">
+          <h4 className="card-header__title">Merge Duplicate Profiles</h4>
+        </div>
+        <p className="text-muted mb-md">
           Select duplicates from the list below to merge into this profile. The
-          selected profiles will be permanently deleted and all of their
-          ledgers, aliases, and attendance records will be cleanly transferred
-          here.
+          selected profiles will be permanently deleted and all of their ledgers,
+          aliases, and attendance records will be cleanly transferred here.
         </p>
-        <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-          <div
-            style={{
-              minHeight: "120px",
-              maxHeight: "300px",
-              overflowY: "auto",
-              fontSize: "0.875rem",
-              flex: 1,
-              padding: "8px",
-              backgroundColor: "var(--bg-elevated)",
-              border: "1px solid var(--border-color)",
-              borderRadius: "4px",
-            }}
-          >
-            {allPlayers
-              ?.filter((p) => p.id !== id)
-              .map((p) => (
-                <label
-                  key={p.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "4px 0",
-                    cursor: "pointer",
+        <div className="flex-between gap-md">
+          <div className="merge-candidates-list">
+            {mergeCandidates.map((p) => (
+              <label key={p.id} className="merge-candidate-label">
+                <input
+                  type="checkbox"
+                  checked={mergeSelection.includes(p.id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setMergeSelection([...mergeSelection, p.id]);
+                    } else {
+                      setMergeSelection(
+                        mergeSelection.filter(
+                          (selectedId) => selectedId !== p.id,
+                        ),
+                      );
+                    }
                   }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={mergeSelection.includes(p.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setMergeSelection([...mergeSelection, p.id]);
-                      } else {
-                        setMergeSelection(
-                          mergeSelection.filter(
-                            (selectedId) => selectedId !== p.id,
-                          ),
-                        );
-                      }
-                    }}
-                    disabled={mergeMutation.isPending}
-                  />
-                  {p.displayName}
-                </label>
-              ))}
+                  disabled={mergeMutation.isPending}
+                />
+                {p.displayName}
+              </label>
+            ))}
           </div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-              width: "200px",
-            }}
-          >
+          <div className="merge-actions">
             {!showConfirmMerge ? (
               <button
                 className="btn btn-primary"
@@ -292,7 +290,8 @@ export const PlayerDetailPage = () => {
                 onClick={(e) => {
                   e.preventDefault();
                   if (mergeSelection.length === 0) {
-                    window.alert(
+                    addToast(
+                      "error",
                       "Please select at least one duplicate profile from the list to merge.",
                     );
                     return;
@@ -304,27 +303,12 @@ export const PlayerDetailPage = () => {
                 {mergeSelection.length !== 1 ? "s" : ""}
               </button>
             ) : (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-              >
-                <p
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "var(--warning)",
-                    fontWeight: 600,
-                    textAlign: "center",
-                    margin: "0 0 4px 0",
-                  }}
-                >
-                  Are you absolutely sure?
+              <div className="gap-sm">
+                <p className="text-danger mb-md">
+                  <strong>Are you absolutely sure?</strong>
                 </p>
                 <button
-                  className="btn"
-                  style={{
-                    backgroundColor: "var(--danger)",
-                    color: "white",
-                    borderColor: "var(--danger)",
-                  }}
+                  className="btn btn-danger"
                   disabled={mergeMutation.isPending}
                   onClick={(e) => {
                     e.preventDefault();
@@ -334,7 +318,7 @@ export const PlayerDetailPage = () => {
                     });
                   }}
                 >
-                  Yes, Delete & Merge
+                  Yes, Delete &amp; Merge
                 </button>
                 <button
                   className="btn btn-outline"
@@ -364,68 +348,30 @@ export const PlayerDetailPage = () => {
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 2fr",
-          gap: "var(--spacing-lg)",
-        }}
-      >
+      <div className="grid-2 gap-md">
         {/* Aliases Column */}
-        <div className="card" style={{ alignSelf: "start" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "var(--spacing-md)",
-            }}
-          >
-            <h3 style={{ fontSize: "1.125rem", fontWeight: 600 }}>
-              Connected Aliases
-            </h3>
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-header__title">Connected Aliases</h3>
             <button
-              className="btn btn-outline"
-              style={{ padding: "4px 8px" }}
-              onClick={handleAddAlias}
+              className="btn btn-outline btn-sm"
+              onClick={() => setShowAliasModal(true)}
             >
               <Plus size={16} />
             </button>
           </div>
 
           {loadingAliases ? (
-            <p>Loading...</p>
+            <p className="text-muted">Loading...</p>
           ) : aliases?.length === 0 ? (
-            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-              No aliases configured.
-            </p>
+            <EmptyAliasState />
           ) : (
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
-            >
+            <div className="gap-sm">
               {aliases?.map((alias: Alias) => (
-                <div
-                  key={alias.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "8px 12px",
-                    backgroundColor: "var(--bg-base)",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-color)",
-                  }}
-                >
-                  <span style={{ fontWeight: 500 }}>{alias.aliasRaw}</span>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {alias.sourceType}
-                  </span>
-                </div>
+                <span key={alias.id} className="alias-pill">
+                  {alias.aliasRaw}
+                  <span className="alias-pill__source">{alias.sourceType}</span>
+                </span>
               ))}
             </div>
           )}
@@ -433,155 +379,19 @@ export const PlayerDetailPage = () => {
 
         {/* Ledger Column */}
         <div className="card">
-          <h3
-            style={{
-              fontSize: "1.125rem",
-              fontWeight: 600,
-              marginBottom: "var(--spacing-md)",
-            }}
-          >
-            Recent Transactions
-          </h3>
-
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                textAlign: "left",
-              }}
-            >
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                  <th
-                    style={{
-                      padding: "8px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Date
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Type
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Amount
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Details
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingLedger ? (
-                  <tr>
-                    <td colSpan={4}>Loading...</td>
-                  </tr>
-                ) : ledger?.data?.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      style={{
-                        padding: "16px",
-                        textAlign: "center",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      No transactions yet.
-                    </td>
-                  </tr>
-                ) : (
-                  ledger?.data?.map(
-                    (entry: {
-                      id: string;
-                      created_at: string;
-                      type: string;
-                      amount_cents: number;
-                      adjustment_reason?: string;
-                    }) => (
-                      <tr
-                        key={entry.id}
-                        style={{
-                          borderBottom: "1px solid var(--border-color)",
-                        }}
-                      >
-                        <td
-                          style={{ padding: "12px 8px", fontSize: "0.875rem" }}
-                        >
-                          {new Date(entry.created_at).toLocaleDateString()}
-                        </td>
-                        <td style={{ padding: "12px 8px" }}>
-                          <span
-                            style={{
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              fontSize: "0.75rem",
-                              textTransform: "uppercase",
-                              fontWeight: 600,
-                              backgroundColor:
-                                entry.type === "charge"
-                                  ? "rgba(239, 68, 68, 0.1)"
-                                  : entry.type === "payment"
-                                    ? "rgba(34, 197, 94, 0.1)"
-                                    : "rgba(148, 163, 184, 0.1)",
-                              color:
-                                entry.type === "charge"
-                                  ? "var(--danger)"
-                                  : entry.type === "payment"
-                                    ? "var(--success)"
-                                    : "var(--text-secondary)",
-                            }}
-                          >
-                            {entry.type}
-                          </span>
-                        </td>
-                        <td style={{ padding: "12px 8px", fontWeight: 500 }}>
-                          {entry.amount_cents >= 0 ? "+" : "-"}
-                          {formatCurrency(Math.abs(entry.amount_cents))}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px 8px",
-                            fontSize: "0.875rem",
-                            color: "var(--text-muted)",
-                          }}
-                        >
-                          {entry.type === "charge"
-                            ? "Game fee"
-                            : entry.type === "adjustment"
-                              ? entry.adjustment_reason
-                              : "Bank deposit"}
-                        </td>
-                      </tr>
-                    ),
-                  )
-                )}
-              </tbody>
-            </table>
+          <div className="card-header">
+            <h3 className="card-header__title">Recent Transactions</h3>
           </div>
+
+          <DataTable<LedgerEntry>
+            columns={ledgerColumns}
+            data={ledgerData}
+            isLoading={loadingLedger}
+            getRowId={(entry) => entry.id}
+            emptyIcon={<Receipt size={32} />}
+            emptyTitle="No transactions yet"
+            emptyDescription="Charges and payments will appear here once games are recorded."
+          />
         </div>
       </div>
 
@@ -589,6 +399,7 @@ export const PlayerDetailPage = () => {
         isOpen={showAliasModal}
         title="Add New Alias"
         onClose={() => setShowAliasModal(false)}
+        size="sm"
         footer={
           <>
             <button
@@ -611,22 +422,13 @@ export const PlayerDetailPage = () => {
           </>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+        <div className="form-group">
+          <p className="text-secondary mb-md">
             Enter a new alias for this player (e.g., their Facebook or Meetup
             name) so the system can automatically match their attendances.
           </p>
-          <div>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontSize: "0.875rem",
-                fontWeight: 500,
-              }}
-            >
-              Alias Name
-            </label>
+          <div className="form-group">
+            <label className="form-label">Alias Name</label>
             <input
               type="text"
               className="input-field"
@@ -646,9 +448,21 @@ export const PlayerDetailPage = () => {
                 }
               }}
             />
+            <span className="form-hint">
+              This alias will be used to match bank transactions and Facebook attendance posts.
+            </span>
           </div>
         </div>
       </Modal>
     </>
   );
 };
+
+function EmptyAliasState() {
+  return (
+    <p className="text-muted">
+      <UserX size={16} /> No aliases configured. Add one to enable automatic
+      matching.
+    </p>
+  );
+}

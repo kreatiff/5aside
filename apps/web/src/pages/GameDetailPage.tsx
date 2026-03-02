@@ -2,15 +2,21 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import {
-  ArrowLeft,
-  Calendar as CalendarIcon,
-  Upload,
-  Edit2,
-  Lock,
-  Save,
-} from "lucide-react";
-import { Modal } from "../components/Modal";
+import { Upload, Edit2, Lock, Save } from "lucide-react";
+import { PageHeader } from "../components/PageHeader";
+import { StatusBadge } from "../components/StatusBadge";
+import { CurrencyDisplay } from "../components/CurrencyDisplay";
+import { DataTable, type Column } from "../components/DataTable";
+import { useToast } from "../contexts/ToastContext";
+import { formatDate } from "../utils/format";
+
+type AttendanceRecord = {
+  id: string;
+  playerId: string;
+  displayName: string;
+  sourceStatus: string;
+  chargeable: boolean;
+};
 
 type GameDetails = {
   id: string;
@@ -18,22 +24,71 @@ type GameDetails = {
   status: string;
   source: string;
   feeCents: number;
-  attendance: {
-    id: string;
-    playerId: string;
-    displayName: string;
-    sourceStatus: string;
-    chargeable: boolean;
-  }[];
+  attendance: AttendanceRecord[];
 };
+
+const statusVariant = (status: string) => {
+  switch (status) {
+    case "completed":
+      return "success" as const;
+    case "scheduled":
+      return "info" as const;
+    default:
+      return "neutral" as const;
+  }
+};
+
+const sourceVariant = (source: string) => {
+  switch (source) {
+    case "facebook":
+      return "info" as const;
+    case "manual":
+      return "neutral" as const;
+    default:
+      return "neutral" as const;
+  }
+};
+
+const attendanceColumns: Column<AttendanceRecord>[] = [
+  {
+    key: "player",
+    header: "Player",
+    sortable: true,
+    sortValue: (att) => att.displayName,
+    render: (att) => (
+      <Link to={`/players/${att.playerId}`} className="text-link">
+        {att.displayName}
+      </Link>
+    ),
+  },
+  {
+    key: "response",
+    header: "Response",
+    sortable: true,
+    sortValue: (att) => att.sourceStatus,
+    render: (att) => (
+      <span className="text-capitalize">{att.sourceStatus}</span>
+    ),
+  },
+  {
+    key: "chargeable",
+    header: "Chargeable",
+    align: "center",
+    render: (att) => (
+      <StatusBadge variant={att.chargeable ? "warning" : "neutral"} dot>
+        {att.chargeable ? "Yes" : "No"}
+      </StatusBadge>
+    ),
+  },
+];
 
 export const GameDetailPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
+  const { addToast } = useToast();
   const [isEditingFee, setIsEditingFee] = useState(false);
   const [feeInput, setFeeInput] = useState("");
   const [importText, setImportText] = useState("");
-  const [showImportSuccessModal, setShowImportSuccessModal] = useState(false);
 
   const { data: game, isLoading } = useQuery({
     queryKey: ["games", id],
@@ -62,9 +117,10 @@ export const GameDetailPage = () => {
       queryClient.invalidateQueries({ queryKey: ["games", id] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
-      setShowImportSuccessModal(true);
+      addToast(
+        "success",
+        "Attendance imported successfully. Check the Reconciliation Queue for any unmatched names."
+      );
     },
   });
 
@@ -82,13 +138,6 @@ export const GameDetailPage = () => {
     }
   };
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(cents / 100);
-  };
-
   if (isLoading)
     return (
       <div className="page-header">
@@ -102,129 +151,66 @@ export const GameDetailPage = () => {
       </div>
     );
 
+  const formattedDate = formatDate(game.gameDate);
+
   return (
     <>
-      <div style={{ marginBottom: "var(--spacing-md)" }}>
-        <Link
-          to="/games"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-            fontSize: "0.875rem",
-            color: "var(--text-muted)",
-          }}
-        >
-          <ArrowLeft size={16} /> Back to Games
-        </Link>
-      </div>
-
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div
-            style={{
-              padding: "16px",
-              borderRadius: "12px",
-              backgroundColor: "rgba(59, 130, 246, 0.1)",
-              color: "var(--primary)",
-            }}
-          >
-            <CalendarIcon size={32} />
+      <PageHeader
+        breadcrumbs={[
+          { label: "Games", to: "/games" },
+          { label: formattedDate },
+        ]}
+        title={`Game on ${formattedDate}`}
+        actions={
+          <div className="flex-between gap-sm">
+            <StatusBadge variant={statusVariant(game.status)} dot>
+              {game.status}
+            </StatusBadge>
+            <StatusBadge variant={sourceVariant(game.source)}>
+              {game.source}
+            </StatusBadge>
           </div>
-          <div>
-            <h1 className="page-title" style={{ marginBottom: "4px" }}>
-              Game on {game.gameDate}
-            </h1>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <span
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: "99px",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  backgroundColor:
-                    game.status === "completed"
-                      ? "rgba(34, 197, 94, 0.1)"
-                      : "rgba(59, 130, 246, 0.1)",
-                  color:
-                    game.status === "completed"
-                      ? "var(--success)"
-                      : "var(--primary)",
-                  textTransform: "uppercase",
-                }}
-              >
-                {game.status}
-              </span>
-              <span
-                style={{
-                  color: "var(--text-muted)",
-                  fontSize: "0.875rem",
-                  textTransform: "capitalize",
-                }}
-              >
-                Source: {game.source}
-              </span>
-            </div>
-          </div>
-        </div>
+        }
+      />
 
-        <div
-          className="card"
-          style={{
-            padding: "16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-            minWidth: "200px",
-          }}
-        >
-          <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
-            Match Fee
-          </span>
+      <div className="grid-2 mt-md">
+        {/* Match Fee Card */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-header__title">Match Fee</h3>
+          </div>
 
           {isEditingFee ? (
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <input
-                type="number"
-                className="input-field"
-                style={{ width: "100px", padding: "4px 8px" }}
-                value={feeInput}
-                onChange={(e) => setFeeInput(e.target.value)}
-              />
-              <button
-                className="btn btn-primary"
-                style={{ padding: "6px" }}
-                onClick={handleSaveFee}
-              >
-                <Save size={16} />
+            <div className="flex-between gap-sm">
+              <div className="input-group">
+                <span className="input-group__prefix">$</span>
+                <input
+                  type="number"
+                  className="input-field"
+                  value={feeInput}
+                  onChange={(e) => setFeeInput(e.target.value)}
+                />
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={handleSaveFee}>
+                <Save size={16} /> Save
               </button>
               <button
-                className="btn btn-outline"
-                style={{ padding: "6px" }}
+                className="btn btn-outline btn-sm"
                 onClick={() => setIsEditingFee(false)}
               >
                 Cancel
               </button>
             </div>
           ) : (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span style={{ fontSize: "1.5rem", fontWeight: 700 }}>
-                {formatCurrency(game.feeCents)}
-              </span>
+            <div className="flex-between">
+              <CurrencyDisplay cents={game.feeCents} size="lg" colorCode={false} />
               {game.status === "completed" ? (
-                <span title="Cannot edit completed game fee">
-                  <Lock size={16} color="var(--text-muted)" />
+                <span className="text-muted" title="Fee locked after finalization">
+                  <Lock size={16} />
                 </span>
               ) : (
                 <button
-                  className="btn btn-outline"
-                  style={{ padding: "4px" }}
+                  className="btn btn-ghost btn-sm"
                   onClick={() => {
                     setFeeInput(game.feeCents.toString());
                     setIsEditingFee(true);
@@ -238,13 +224,7 @@ export const GameDetailPage = () => {
 
           {game.status !== "completed" && (
             <button
-              className="btn btn-outline"
-              style={{
-                width: "100%",
-                marginTop: "8px",
-                color: "var(--success)",
-                borderColor: "var(--success)",
-              }}
+              className="btn btn-success mt-md"
               onClick={() => updateGameMutation.mutate({ status: "completed" })}
               disabled={updateGameMutation.isPending}
             >
@@ -252,180 +232,35 @@ export const GameDetailPage = () => {
             </button>
           )}
         </div>
-      </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
-          gap: "var(--spacing-lg)",
-        }}
-      >
-        <div className="card" style={{ alignSelf: "start" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "var(--spacing-md)",
-            }}
-          >
-            <h3 style={{ fontSize: "1.125rem", fontWeight: 600 }}>
-              Attendance List ({game.attendance?.length || 0})
+        {/* Import Facebook Poll Card */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-header__title">
+              <Upload size={20} /> Import Facebook Poll
             </h3>
           </div>
-
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                textAlign: "left",
-              }}
-            >
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                  <th
-                    style={{
-                      padding: "8px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Player
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Response
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Chargeable
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {game.attendance?.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={3}
-                      style={{
-                        padding: "16px",
-                        textAlign: "center",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      No attendance records.
-                    </td>
-                  </tr>
-                ) : (
-                  game.attendance?.map(
-                    (att: {
-                      id: string;
-                      playerId: string;
-                      displayName: string;
-                      sourceStatus: string;
-                      chargeable: boolean;
-                    }) => (
-                      <tr
-                        key={att.id}
-                        style={{
-                          borderBottom: "1px solid var(--border-color)",
-                        }}
-                      >
-                        <td style={{ padding: "12px 8px", fontWeight: 500 }}>
-                          <Link
-                            to={`/players/${att.playerId}`}
-                            style={{ color: "var(--text-primary)" }}
-                          >
-                            {att.displayName}
-                          </Link>
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px 8px",
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {att.sourceStatus}
-                        </td>
-                        <td style={{ padding: "12px 8px" }}>
-                          <span
-                            style={{
-                              color: att.chargeable
-                                ? "var(--warning)"
-                                : "var(--text-muted)",
-                            }}
-                          >
-                            {att.chargeable ? "Yes" : "No"}
-                          </span>
-                        </td>
-                      </tr>
-                    ),
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="card" style={{ alignSelf: "start" }}>
-          <h3
-            style={{
-              fontSize: "1.125rem",
-              fontWeight: 600,
-              marginBottom: "var(--spacing-md)",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <Upload size={20} color="var(--primary)" />
-            Import Facebook Poll
-          </h3>
-          <p
-            style={{
-              fontSize: "0.875rem",
-              color: "var(--text-muted)",
-              marginBottom: "var(--spacing-md)",
-            }}
-          >
+          <p className="text-secondary mb-md">
             Copy and paste the attendee list from the Facebook event poll. Our
             engine will map names automatically.
           </p>
           <form onSubmit={handleImportSubmit}>
-            <textarea
-              className="input-field"
-              rows={8}
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-              placeholder="e.g. 5 Going: John Doe, Jane Smith
-3 Defaulted: Bobby Tables
-2 Can't go: Foo Bar"
-              style={{
-                resize: "vertical",
-                marginBottom: "var(--spacing-md)",
-                fontFamily: "monospace",
-              }}
-              required
-            />
+            <div className="form-group">
+              <textarea
+                className="input-field"
+                rows={8}
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder={`e.g. 5 Going: John Doe, Jane Smith\n3 Defaulted: Bobby Tables\n2 Can't go: Foo Bar`}
+                required
+              />
+              <span className="form-hint">
+                Supports Going, Defaulted, and Can't go sections
+              </span>
+            </div>
             <button
               type="submit"
               className="btn btn-primary"
-              style={{ width: "100%" }}
               disabled={importAttendanceMutation.isPending}
             >
               {importAttendanceMutation.isPending
@@ -436,25 +271,21 @@ export const GameDetailPage = () => {
         </div>
       </div>
 
-      <Modal
-        isOpen={showImportSuccessModal}
-        title="Import Successful"
-        onClose={() => setShowImportSuccessModal(false)}
-        footer={
-          <button
-            className="btn btn-primary"
-            onClick={() => setShowImportSuccessModal(false)}
-          >
-            OK
-          </button>
-        }
-      >
-        <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-          The attendance has been imported successfully. Please check the
-          Reconciliation Queue for any mismatched names that need to be manually
-          linked to player profiles.
-        </p>
-      </Modal>
+      {/* Attendance Table */}
+      <div className="card mt-md">
+        <div className="card-header">
+          <h3 className="card-header__title">
+            Attendance List ({game.attendance?.length || 0})
+          </h3>
+        </div>
+        <DataTable<AttendanceRecord>
+          columns={attendanceColumns}
+          data={game.attendance ?? []}
+          getRowId={(att) => att.id}
+          emptyTitle="No attendance records"
+          emptyDescription="Import a Facebook poll or add attendance manually."
+        />
+      </div>
     </>
   );
 };

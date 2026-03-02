@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { motion } from "framer-motion";
+import { AlertCircle } from "lucide-react";
 
 export const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -38,11 +40,17 @@ export const LoginPage = () => {
 
   return (
     <div className="auth-container">
-      <div className="auth-card">
+      <div className="auth-bg-orb auth-bg-orb--blue" />
+      <div className="auth-bg-orb auth-bg-orb--purple" />
+
+      <motion.div
+        className="auth-card"
+        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+      >
         <div className="auth-header">
-          <div className="logo-icon" style={{ margin: "0 auto 16px" }}>
-            5
-          </div>
+          <div className="logo-icon">5</div>
           <h1>Welcome Back</h1>
           <p>Login to 5-a-Side Admin</p>
         </div>
@@ -79,24 +87,21 @@ export const LoginPage = () => {
           </div>
 
           {error && (
-            <p
-              className="error-text"
-              style={{ marginBottom: "16px", textAlign: "center" }}
-            >
-              {error}
-            </p>
+            <div className="auth-error">
+              <AlertCircle size={18} />
+              <span>{error}</span>
+            </div>
           )}
 
           <button
             type="submit"
-            className="btn btn-primary"
-            style={{ width: "100%" }}
+            className={`btn btn-primary${loading ? " btn-loading" : ""}`}
             disabled={loading}
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 };

@@ -8,11 +8,22 @@ import {
   ShieldCheck,
   Check,
 } from "lucide-react";
+import { PageHeader } from "../components/PageHeader";
+import { StatusBadge } from "../components/StatusBadge";
+import { useToast } from "../contexts/ToastContext";
+import { formatCurrency } from "../utils/format";
+
+type IntegrityIssue = {
+  playerId: string;
+  cachedBalance: number;
+  calculatedBalance: number;
+  difference: number;
+};
 
 export const SettingsPage = () => {
   const queryClient = useQueryClient();
+  const { addToast } = useToast();
   const [feeInput, setFeeInput] = useState("");
-  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ["settings"],
@@ -43,8 +54,7 @@ export const SettingsPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      addToast("success", "Settings saved successfully");
     },
   });
 
@@ -56,70 +66,46 @@ export const SettingsPage = () => {
     }
   };
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(cents / 100);
-  };
+  const hasIssues = integrity?.issues?.length > 0;
 
-  if (isLoading)
+  if (isLoading) {
     return (
-      <div className="page-header">
-        <h1 className="page-title">Loading...</h1>
-      </div>
+      <PageHeader title="Settings" />
     );
+  }
 
   return (
     <>
-      <div className="page-header">
-        <h1 className="page-title">Settings & Admin</h1>
-      </div>
+      <PageHeader title="Settings" />
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "var(--spacing-lg)",
-        }}
-      >
+      <div className="grid-2 gap-md">
         <div className="card">
-          <h3
-            style={{
-              fontSize: "1.125rem",
-              fontWeight: 600,
-              marginBottom: "var(--spacing-md)",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <Settings size={20} color="var(--primary)" />
-            Application Configuration
-          </h3>
+          <div className="card-header">
+            <h3 className="card-header__title">
+              <Settings size={20} className="text-primary" />
+              Application Configuration
+            </h3>
+          </div>
 
           <form onSubmit={handleSave}>
             <div className="form-group">
               <label className="form-label" htmlFor="fee">
-                Default Game Fee ($)
+                Default Game Fee
               </label>
-              <input
-                id="fee"
-                type="number"
-                step="0.01"
-                min="0"
-                className="input-field"
-                value={feeInput}
-                onChange={(e) => setFeeInput(e.target.value)}
-                required
-              />
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  color: "var(--text-muted)",
-                  marginTop: "8px",
-                }}
-              >
+              <div className="input-group">
+                <span className="input-group__prefix">$</span>
+                <input
+                  id="fee"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="input-field"
+                  value={feeInput}
+                  onChange={(e) => setFeeInput(e.target.value)}
+                  required
+                />
+              </div>
+              <p className="form-hint">
                 This fee applies to all newly created games. It does not affect
                 past games.
               </p>
@@ -135,112 +121,58 @@ export const SettingsPage = () => {
               />
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={updateSettingsMutation.isPending}
-              >
-                <Save size={16} />{" "}
-                {updateSettingsMutation.isPending
-                  ? "Saving..."
-                  : "Save Settings"}
-              </button>
-              {saveSuccess && (
-                <span
-                  style={{
-                    color: "var(--success)",
-                    fontSize: "0.875rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
-                  <Check size={16} /> Settings saved
-                </span>
-              )}
-            </div>
+            <button
+              type="submit"
+              className={`btn btn-primary ${updateSettingsMutation.isPending ? "btn-loading" : ""}`}
+              disabled={updateSettingsMutation.isPending}
+            >
+              <Save size={16} />
+              {updateSettingsMutation.isPending
+                ? "Saving..."
+                : "Save Settings"}
+            </button>
           </form>
         </div>
 
         <div className="card">
-          <h3
-            style={{
-              fontSize: "1.125rem",
-              fontWeight: 600,
-              marginBottom: "var(--spacing-md)",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <ShieldCheck size={20} color="var(--success)" />
-            Admin Tools
-          </h3>
+          <div className="card-header">
+            <h3 className="card-header__title">
+              <ShieldCheck size={20} className="text-success" />
+              Admin Tools
+            </h3>
+          </div>
 
           <div
-            style={{
-              padding: "16px",
-              backgroundColor: "var(--bg-base)",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color)",
-            }}
+            className={`card card--bordered ${hasIssues ? "card--border-danger" : "card--border-success"}`}
           >
-            <h4 style={{ fontWeight: 600, marginBottom: "8px" }}>
-              Ledger Integrity Check
+            <h4 className="mb-sm">
+              <strong>Ledger Integrity Check</strong>
             </h4>
-            <p
-              style={{
-                fontSize: "0.875rem",
-                color: "var(--text-secondary)",
-                marginBottom: "16px",
-              }}
-            >
+            <p className="text-secondary mb-md">
               Verifies that the sum of all ledger transactions exactly matches
               each player's cached `current_balance_cents`.
             </p>
 
             {loadingIntegrity ? (
-              <p style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
-                Running check...
-              </p>
-            ) : integrity?.issues?.length === 0 ? (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  color: "var(--success)",
-                  fontWeight: 500,
-                }}
-              >
-                <Check size={20} /> Integrity Verified (All balances match)
+              <p className="text-muted">Running check...</p>
+            ) : !hasIssues ? (
+              <div className="flex-between gap-sm">
+                <StatusBadge variant="success" dot>
+                  <Check size={14} /> Integrity Verified
+                </StatusBadge>
+                <span className="text-muted">All balances match</span>
               </div>
             ) : (
-              <div style={{ color: "var(--danger)" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontWeight: 600,
-                    marginBottom: "8px",
-                  }}
-                >
-                  <AlertTriangle size={20} /> Integrity Issues Detected
+              <div>
+                <div className="mb-sm">
+                  <StatusBadge variant="danger" dot pulse>
+                    <AlertTriangle size={14} /> Integrity Issues Detected
+                  </StatusBadge>
                 </div>
-                <ul style={{ fontSize: "0.875rem", paddingLeft: "24px" }}>
+                <ul className="integrity-issues-list">
                   {integrity?.issues?.map(
-                    (
-                      issue: {
-                        playerId: string;
-                        cachedBalance: number;
-                        calculatedBalance: number;
-                        difference: number;
-                      },
-                      index: number,
-                    ) => (
-                      <li key={index}>
+                    (issue: IntegrityIssue, index: number) => (
+                      <li key={index} className="text-danger">
                         Player {issue.playerId}: Cached{" "}
                         {formatCurrency(issue.cachedBalance)}, Calculated{" "}
                         {formatCurrency(issue.calculatedBalance)} (Diff:{" "}

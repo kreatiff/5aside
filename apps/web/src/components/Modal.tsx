@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 
 type ModalProps = {
@@ -7,17 +8,10 @@ type ModalProps = {
   title: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  size?: "sm" | "md" | "lg";
 };
 
-export const Modal = ({
-  isOpen,
-  onClose,
-  title,
-  children,
-  footer,
-}: ModalProps) => {
-  const modalRef = useRef<HTMLDivElement>(null);
-
+export const Modal = ({ isOpen, onClose, title, children, footer, size = "md" }: ModalProps) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -34,37 +28,37 @@ export const Modal = ({
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-content"
-        ref={modalRef}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-header">
-          <h3
-            style={{
-              fontSize: "1.25rem",
-              margin: 0,
-              fontWeight: 600,
-              color: "var(--text-primary)",
-            }}
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="modal-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={onClose}
+        >
+          <motion.div
+            className={`modal-content modal-${size}`}
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            onClick={(e) => e.stopPropagation()}
           >
-            {title}
-          </h3>
-          <button
-            className="btn-icon"
-            onClick={onClose}
-            aria-label="Close modal"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <div className="modal-body">{children}</div>
-        {footer && <div className="modal-footer">{footer}</div>}
-      </div>
-    </div>
+            <div className="modal-accent" />
+            <div className="modal-header">
+              <h3>{title}</h3>
+              <button className="btn-icon" onClick={onClose} aria-label="Close modal">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">{children}</div>
+            {footer && <div className="modal-footer">{footer}</div>}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

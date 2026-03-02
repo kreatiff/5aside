@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
+import { motion } from "framer-motion";
 import { Layout } from "./components/Layout";
 import { useAuth } from "./contexts/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
@@ -18,16 +19,15 @@ const ProtectedRoute = () => {
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "100vh",
-          background: "var(--bg-base)",
-        }}
-      >
-        <p style={{ color: "var(--text-secondary)" }}>Loading...</p>
+      <div className="auth-loading">
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], opacity: [0.7, 1, 0.7] }}
+          transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+        >
+          <div className="logo-icon" style={{ width: 56, height: 56, fontSize: "1.75rem", borderRadius: 14 }}>
+            5
+          </div>
+        </motion.div>
       </div>
     );
   }

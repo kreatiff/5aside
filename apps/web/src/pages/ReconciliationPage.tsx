@@ -1,11 +1,37 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { AlertCircle, Check, X, Search, RefreshCw } from "lucide-react";
+import { Check, X, Search, RefreshCw, CheckCircle } from "lucide-react";
+import { PageHeader } from "../components/PageHeader";
+import { StatusBadge } from "../components/StatusBadge";
+import { DataTable, type Column } from "../components/DataTable";
+import { useToast } from "../contexts/ToastContext";
+import { formatCurrency, formatDate } from "../utils/format";
+
+type QueueItem = {
+  id: string;
+  createdAt: string;
+  itemType: "bank_transaction" | "attendance";
+  payload: {
+    descriptionRaw?: string;
+    externalTxnId?: string;
+    sourceRef?: string;
+    amountCents?: number;
+    playerName?: string;
+  };
+  suggestedPlayerId: string | null;
+  confidence: number;
+};
+
+type Player = {
+  id: string;
+  displayName: string;
+};
 
 export const ReconciliationPage = () => {
   const queryClient = useQueryClient();
+  const { addToast } = useToast();
 
   const { data: queue, isLoading: loadingQueue } = useQuery({
     queryKey: ["reconciliation"],
@@ -44,8 +70,6 @@ export const ReconciliationPage = () => {
     },
   });
 
-  const [rescanSuccess, setRescanSuccess] = useState<string | null>(null);
-
   const rescanMutation = useMutation({
     mutationFn: async () => {
       const { data } = await api.post("/reconciliation-queue/rescan");
@@ -56,53 +80,201 @@ export const ReconciliationPage = () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["players"] });
       queryClient.invalidateQueries({ queryKey: ["games"] });
-      setRescanSuccess(
+      addToast(
+        "success",
         `Rescan complete. Mapped ${data.transactionsMapped} transactions.`,
       );
-      setTimeout(() => setRescanSuccess(null), 5000);
     },
   });
 
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(cents / 100);
+  const getPlayerName = (playerId: string): string => {
+    const player = players?.find((p: Player) => p.id === playerId);
+    return player?.displayName || "Unknown Player";
   };
+
+  const items: QueueItem[] = useMemo(() => queue?.data ?? [], [queue]);
+
+  const columns: Column<QueueItem>[] = useMemo(
+    () => [
+      {
+        key: "date",
+        header: "Date",
+        sortable: true,
+        sortValue: (item) => new Date(item.createdAt).getTime(),
+        render: (item) => (
+          <span className="text-secondary">
+            {formatDate(item.createdAt.split("T")[0])}
+          </span>
+        ),
+      },
+      {
+        key: "type",
+        header: "Type",
+        render: (item) => (
+          <StatusBadge
+            variant={item.itemType === "attendance" ? "info" : "success"}
+          >
+            {item.itemType === "bank_transaction" ? "PAYMENT" : "ATTENDANCE"}
+          </StatusBadge>
+        ),
+      },
+      {
+        key: "details",
+        header: "Details",
+        render: (item) => {
+          const payload = item.payload;
+          if (item.itemType === "bank_transaction") {
+            return (
+              <div>
+                <p className="text-primary mb-xs">
+                  <strong>
+                    {payload.descriptionRaw} (
+                    {payload.externalTxnId || payload.sourceRef || "Manual"})
+                  </strong>
+                </p>
+                <p className="text-success">
+                  <strong>{formatCurrency(payload.amountCents ?? 0)}</strong>
+                </p>
+              </div>
+            );
+          }
+          return (
+            <div>
+              <p className="text-primary mb-xs">
+                <strong>"{payload.playerName}"</strong>
+              </p>
+              <p className="text-muted text-sm">from Facebook import</p>
+            </div>
+          );
+        },
+      },
+      {
+        key: "suggestion",
+        header: "Suggestion",
+        render: (item) => {
+          if (!item.suggestedPlayerId) {
+            return <span className="text-muted">None</span>;
+          }
+          const confidencePct = Math.round(item.confidence * 100);
+          const isHighConfidence = item.confidence > 0.8;
+          return (
+            <div>
+              <Link
+                to={`/players/${item.suggestedPlayerId}`}
+                className="text-primary"
+              >
+                <strong>{getPlayerName(item.suggestedPlayerId)}</strong>
+              </Link>
+              <div className="confidence-bar mt-xs">
+                <div className="confidence-bar__track">
+                  <div
+                    className={`confidence-bar__fill ${isHighConfidence ? "confidence-bar__fill--high" : "confidence-bar__fill--low"}`}
+                    role="progressbar"
+                    aria-valuenow={confidencePct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  />
+                </div>
+                <span className="confidence-bar__label">
+                  {confidencePct}% Match
+                </span>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        align: "right",
+        render: (item) => {
+          const isResolving = resolvingId === item.id;
+
+          if (isResolving) {
+            return (
+              <div className="recon-resolve-panel">
+                <select
+                  className="input-field"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      resolveMutation.mutate({
+                        id: item.id,
+                        playerId: e.target.value,
+                      });
+                      setResolvingId(null);
+                    }
+                  }}
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Select Player...
+                  </option>
+                  {players?.map((p: Player) => (
+                    <option key={p.id} value={p.id}>
+                      {p.displayName}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setResolvingId(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            );
+          }
+
+          return (
+            <div className="recon-actions">
+              {item.suggestedPlayerId && (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() =>
+                    resolveMutation.mutate({
+                      id: item.id,
+                      playerId: item.suggestedPlayerId!,
+                    })
+                  }
+                  title="Accept Suggestion"
+                >
+                  <Check size={16} /> Accept
+                </button>
+              )}
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setResolvingId(item.id)}
+              >
+                <Search size={16} /> Find
+              </button>
+              <button
+                className="btn btn-ghost btn-icon btn-danger"
+                onClick={() => dismissMutation.mutate(item.id)}
+                title="Dismiss / Ignore"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [resolvingId, players],
+  );
 
   return (
     <>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title" style={{ marginBottom: "4px" }}>
-            Reconciliation Queue
-          </h1>
-          <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-            Items here require manual matching because the system couldn't
-            confidently link them to a player.
-          </p>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {rescanSuccess && (
-            <span
-              style={{
-                color: "var(--success-color, #10b981)",
-                fontSize: "0.875rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-            >
-              <Check size={16} /> {rescanSuccess}
-            </span>
-          )}
+      <PageHeader
+        title="Reconciliation Queue"
+        description="Items here require manual matching because the system couldn't confidently link them to a player."
+        actions={
           <button
-            className="btn btn-secondary"
+            className={`btn btn-outline ${rescanMutation.isPending ? "btn-loading" : ""}`}
             onClick={() => rescanMutation.mutate()}
             disabled={rescanMutation.isPending}
-            style={{ display: "flex", alignItems: "center", gap: "8px" }}
           >
             <RefreshCw
               size={18}
@@ -110,350 +282,18 @@ export const ReconciliationPage = () => {
             />
             {rescanMutation.isPending ? "Rescanning..." : "Rescan Transactions"}
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              textAlign: "left",
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  backgroundColor: "var(--bg-elevated)",
-                  borderBottom: "1px solid var(--border-color)",
-                }}
-              >
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  Date
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  Type
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  Details
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  Suggestion
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                    textAlign: "right",
-                  }}
-                >
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loadingQueue ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    style={{ padding: "16px", textAlign: "center" }}
-                  >
-                    Loading...
-                  </td>
-                </tr>
-              ) : queue?.data?.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    style={{ padding: "48px 16px", textAlign: "center" }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "12px",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      <Check size={48} color="var(--success)" opacity={0.5} />
-                      <p>You're all caught up! No items to reconcile.</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                queue?.data?.map((item: any) => {
-                  const payload = item.payload;
-                  const isResolving = resolvingId === item.id;
-
-                  return (
-                    <tr
-                      key={item.id}
-                      style={{
-                        borderBottom: "1px solid var(--border-color)",
-                        transition: "background 0.2s",
-                        backgroundColor: isResolving
-                          ? "var(--bg-elevated)"
-                          : "transparent",
-                      }}
-                    >
-                      <td
-                        style={{
-                          padding: "16px",
-                          fontSize: "0.875rem",
-                          verticalAlign: "top",
-                        }}
-                      >
-                        {new Date(item.createdAt).toLocaleDateString()}
-                      </td>
-                      <td style={{ padding: "16px", verticalAlign: "top" }}>
-                        <span
-                          style={{
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            fontSize: "0.75rem",
-                            fontWeight: 600,
-                            backgroundColor:
-                              item.itemType === "attendance"
-                                ? "rgba(59, 130, 246, 0.1)"
-                                : "rgba(34, 197, 94, 0.1)",
-                            color:
-                              item.itemType === "attendance"
-                                ? "var(--primary)"
-                                : "var(--success)",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          {item.itemType}
-                        </span>
-                      </td>
-                      <td style={{ padding: "16px", verticalAlign: "top" }}>
-                        {item.itemType === "bank_transaction" ? (
-                          <div>
-                            <p style={{ fontWeight: 500, marginBottom: "4px" }}>
-                              {payload.descriptionRaw} (
-                              {payload.externalTxnId ||
-                                payload.sourceRef ||
-                                "Manual"}
-                              )
-                            </p>
-                            <p
-                              style={{
-                                color: "var(--success)",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {formatCurrency(payload.amountCents)}
-                            </p>
-                          </div>
-                        ) : (
-                          <div>
-                            <p style={{ fontWeight: 500, marginBottom: "4px" }}>
-                              "{payload.playerName}"
-                            </p>
-                            <p
-                              style={{
-                                color: "var(--text-muted)",
-                                fontSize: "0.75rem",
-                              }}
-                            >
-                              from Facebook import
-                            </p>
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: "16px", verticalAlign: "top" }}>
-                        {item.suggestedPlayerId ? (
-                          <div>
-                            <Link
-                              to={`/players/${item.suggestedPlayerId}`}
-                              style={{
-                                fontWeight: 500,
-                                color: "var(--primary)",
-                              }}
-                            >
-                              {players?.find(
-                                (p: { id: string; displayName: string }) =>
-                                  p.id === item.suggestedPlayerId,
-                              )?.displayName || "Unknown Player"}
-                            </Link>
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px",
-                                marginTop: "4px",
-                                fontSize: "0.75rem",
-                                color:
-                                  item.confidence > 0.8
-                                    ? "var(--success)"
-                                    : "var(--warning)",
-                              }}
-                            >
-                              <AlertCircle size={12} />
-                              {(item.confidence * 100).toFixed(0)}% Match
-                            </div>
-                          </div>
-                        ) : (
-                          <span
-                            style={{
-                              color: "var(--text-muted)",
-                              fontSize: "0.875rem",
-                            }}
-                          >
-                            None
-                          </span>
-                        )}
-                      </td>
-                      <td
-                        style={{
-                          padding: "16px",
-                          verticalAlign: "top",
-                          textAlign: "right",
-                        }}
-                      >
-                        {isResolving ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "8px",
-                              alignItems: "flex-end",
-                              minWidth: "200px",
-                            }}
-                          >
-                            <select
-                              className="input-field"
-                              style={{ width: "100%", padding: "6px" }}
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  resolveMutation.mutate({
-                                    id: item.id,
-                                    playerId: e.target.value,
-                                  });
-                                  setResolvingId(null);
-                                }
-                              }}
-                              defaultValue=""
-                            >
-                              <option value="" disabled>
-                                Select Player...
-                              </option>
-                              {players?.map(
-                                (p: { id: string; displayName: string }) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.displayName}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                            <button
-                              className="btn btn-outline"
-                              style={{
-                                fontSize: "0.75rem",
-                                padding: "4px 8px",
-                              }}
-                              onClick={() => setResolvingId(null)}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "8px",
-                              justifyContent: "flex-end",
-                            }}
-                          >
-                            {item.suggestedPlayerId && (
-                              <button
-                                className="btn btn-primary"
-                                style={{
-                                  padding: "6px 12px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                }}
-                                onClick={() =>
-                                  resolveMutation.mutate({
-                                    id: item.id,
-                                    playerId: item.suggestedPlayerId,
-                                  })
-                                }
-                                title="Accept Suggestion"
-                              >
-                                <Check size={16} /> Accept
-                              </button>
-                            )}
-                            <button
-                              className="btn btn-outline"
-                              style={{
-                                padding: "6px 12px",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px",
-                              }}
-                              onClick={() => setResolvingId(item.id)}
-                            >
-                              <Search size={16} /> Find
-                            </button>
-                            <button
-                              className="btn btn-outline"
-                              style={{
-                                padding: "6px",
-                                color: "var(--danger)",
-                                borderColor: "transparent",
-                                backgroundColor: "rgba(239, 68, 68, 0.1)",
-                              }}
-                              onClick={() => dismissMutation.mutate(item.id)}
-                              title="Dismiss / Ignore"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable<QueueItem>
+        columns={columns}
+        data={items}
+        isLoading={loadingQueue}
+        getRowId={(item) => item.id}
+        emptyIcon={<CheckCircle size={48} />}
+        emptyTitle="You're all caught up!"
+        emptyDescription="No items to reconcile."
+      />
     </>
   );
 };

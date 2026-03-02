@@ -4,6 +4,73 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { Plus, Calendar as CalendarIcon } from "lucide-react";
 import { Modal } from "../components/Modal";
+import { PageHeader } from "../components/PageHeader";
+import { DataTable, type Column } from "../components/DataTable";
+import { StatusBadge } from "../components/StatusBadge";
+import { CurrencyDisplay } from "../components/CurrencyDisplay";
+import { useToast } from "../contexts/ToastContext";
+import { formatDate } from "../utils/format";
+
+type Game = {
+  id: string;
+  gameDate: string;
+  status: string;
+  feeCents: number;
+  attendanceCount?: number;
+  source: string;
+};
+
+function getStatusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
+  switch (status) {
+    case "completed":
+      return "success";
+    case "cancelled":
+      return "danger";
+    case "pending":
+      return "info";
+    default:
+      return "neutral";
+  }
+}
+
+const columns: Column<Game>[] = [
+  {
+    key: "gameDate",
+    header: "Date",
+    sortable: true,
+    sortValue: (game) => game.gameDate,
+    render: (game) => (
+      <span className="data-table__date-cell">
+        <CalendarIcon size={20} className="text-primary" />
+        {formatDate(game.gameDate)}
+      </span>
+    ),
+  },
+  {
+    key: "status",
+    header: "Status",
+    render: (game) => (
+      <StatusBadge variant={getStatusVariant(game.status)} dot>
+        {game.status}
+      </StatusBadge>
+    ),
+  },
+  {
+    key: "feeCents",
+    header: "Fee",
+    render: (game) => <CurrencyDisplay cents={game.feeCents} size="sm" colorCode={false} />,
+  },
+  {
+    key: "attendanceCount",
+    header: "Attendees",
+    render: (game) => game.attendanceCount || 0,
+  },
+  {
+    key: "source",
+    header: "Source",
+    render: (game) => <span className="text-muted text-capitalize">{game.source}</span>,
+  },
+];
 
 export const GamesPage = () => {
   const [showGameModal, setShowGameModal] = useState(false);
@@ -14,6 +81,7 @@ export const GamesPage = () => {
 
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { addToast } = useToast();
 
   const { data, isLoading } = useQuery({
     queryKey: ["games"],
@@ -50,6 +118,7 @@ export const GamesPage = () => {
     onSuccess: (newGame) => {
       queryClient.invalidateQueries({ queryKey: ["games"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      addToast("success", "Game created successfully");
       navigate(`/games/${newGame.id}`);
     },
   });
@@ -70,197 +139,35 @@ export const GamesPage = () => {
     }
   };
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(cents / 100);
-  };
+  const games: Game[] = data?.data ?? [];
 
   return (
     <>
-      <div className="page-header">
-        <h1 className="page-title">Games</h1>
-        <button className="btn btn-primary" onClick={handleCreateGame}>
-          <Plus size={16} /> Create Game
-        </button>
-      </div>
+      <PageHeader
+        title="Games"
+        actions={
+          <button className="btn btn-primary" onClick={handleCreateGame}>
+            <Plus size={16} /> Create Game
+          </button>
+        }
+      />
 
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              textAlign: "left",
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  backgroundColor: "var(--bg-elevated)",
-                  borderBottom: "1px solid var(--border-color)",
-                }}
-              >
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  Date
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  Status
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  Fee
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  Attendees
-                </th>
-                <th
-                  style={{
-                    padding: "12px 16px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 500,
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  Source
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    style={{ padding: "16px", textAlign: "center" }}
-                  >
-                    Loading...
-                  </td>
-                </tr>
-              ) : data?.data?.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    style={{ padding: "16px", textAlign: "center" }}
-                  >
-                    No games found
-                  </td>
-                </tr>
-              ) : (
-                data?.data?.map(
-                  (game: {
-                    id: string;
-                    gameDate: string;
-                    status: string;
-                    feeCents: number;
-                    attendanceCount?: number;
-                    source: string;
-                  }) => (
-                    <tr
-                      key={game.id}
-                      style={{
-                        borderBottom: "1px solid var(--border-color)",
-                        cursor: "pointer",
-                        transition: "background 0.2s",
-                      }}
-                      onClick={() => navigate(`/games/${game.id}`)}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.backgroundColor =
-                          "var(--bg-elevated)")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.backgroundColor = "transparent")
-                      }
-                    >
-                      <td style={{ padding: "12px 16px" }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            fontWeight: 500,
-                          }}
-                        >
-                          <CalendarIcon size={20} color="var(--primary)" />
-                          {game.gameDate}
-                        </div>
-                      </td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <span
-                          style={{
-                            padding: "4px 8px",
-                            borderRadius: "99px",
-                            fontSize: "0.75rem",
-                            fontWeight: 500,
-                            backgroundColor:
-                              game.status === "completed"
-                                ? "rgba(34, 197, 94, 0.1)"
-                                : "rgba(59, 130, 246, 0.1)",
-                            color:
-                              game.status === "completed"
-                                ? "var(--success)"
-                                : "var(--primary)",
-                          }}
-                        >
-                          {game.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: "12px 16px", fontWeight: 500 }}>
-                        {formatCurrency(game.feeCents)}
-                      </td>
-                      <td style={{ padding: "12px 16px" }}>
-                        {game.attendanceCount || 0}
-                      </td>
-                      <td
-                        style={{
-                          padding: "12px 16px",
-                          color: "var(--text-muted)",
-                          fontSize: "0.875rem",
-                          textTransform: "capitalize",
-                        }}
-                      >
-                        {game.source}
-                      </td>
-                    </tr>
-                  ),
-                )
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable<Game>
+        columns={columns}
+        data={games}
+        isLoading={isLoading}
+        getRowId={(game) => game.id}
+        onRowClick={(game) => navigate(`/games/${game.id}`)}
+        emptyIcon={<CalendarIcon size={48} />}
+        emptyTitle="No games yet"
+        emptyDescription="Create your first game to start tracking attendance and fees."
+      />
 
       <Modal
         isOpen={showGameModal}
         title="Create New Game"
         onClose={() => setShowGameModal(false)}
+        size="sm"
         footer={
           <>
             <button
@@ -287,37 +194,19 @@ export const GamesPage = () => {
           </>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontSize: "0.875rem",
-                fontWeight: 500,
-              }}
-            >
-              Game Date (YYYY-MM-DD)
-            </label>
-            <input
-              type="text"
-              className="input-field"
-              value={newGameDate}
-              onChange={(e) => setNewGameDate(e.target.value)}
-              placeholder="e.g. 2025-01-01"
-            />
-          </div>
-          <div>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontSize: "0.875rem",
-                fontWeight: 500,
-              }}
-            >
-              Fee (in cents)
-            </label>
+        <div className="form-group">
+          <label className="form-label">Game Date</label>
+          <input
+            type="date"
+            className="input-field"
+            value={newGameDate}
+            onChange={(e) => setNewGameDate(e.target.value)}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Fee (in cents)</label>
+          <div className="input-group">
+            <span className="input-group__prefix">$</span>
             <input
               type="number"
               className="input-field"
@@ -338,6 +227,7 @@ export const GamesPage = () => {
               }}
             />
           </div>
+          <span className="form-hint">Amount in cents (e.g. 1000 = $10.00)</span>
         </div>
       </Modal>
     </>

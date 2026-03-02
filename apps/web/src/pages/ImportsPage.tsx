@@ -1,15 +1,29 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { Upload, FileText, CheckCircle, XCircle } from "lucide-react";
+import { Upload, FileText, Copy } from "lucide-react";
+import { PageHeader } from "../components/PageHeader";
+import { StatusBadge } from "../components/StatusBadge";
+import { DataTable, type Column } from "../components/DataTable";
+import { useToast } from "../contexts/ToastContext";
+import { formatDateTime } from "../utils/format";
+
+type ImportRecord = {
+  id: string;
+  createdAt: string;
+  sourceType: string;
+  status: string;
+  recordCount: number;
+  errorDetails?: string;
+};
 
 export const ImportsPage = () => {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [dragOver, setDragOver] = useState(false);
 
   const queryClient = useQueryClient();
+  const { addToast } = useToast();
 
   const { data, isLoading } = useQuery({
     queryKey: ["imports"],
@@ -22,23 +36,38 @@ export const ImportsPage = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
-      setError("");
-      setSuccess("");
     }
   };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const dropped = e.dataTransfer.files?.[0];
+    if (dropped && dropped.name.endsWith(".csv")) {
+      setFile(dropped);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOver(false);
+  }, []);
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
 
     setUploading(true);
-    setError("");
-    setSuccess("");
 
     try {
       const text = await file.text();
       const { data } = await api.post("/imports/bank-csv", { csv: text });
-      setSuccess(
+      addToast(
+        "success",
         `Imported successfully. Processed ${data.posted + data.queued} transactions (${data.posted} posted, ${data.queued} queued for reconciliation).`,
       );
       setFile(null);
@@ -47,53 +76,79 @@ export const ImportsPage = () => {
       queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
-      setError(e.response?.data?.error || "Failed to upload CSV");
+      addToast("error", e.response?.data?.error || "Failed to upload CSV");
     } finally {
       setUploading(false);
     }
   };
 
+  const handleCopyWebhookUrl = useCallback(() => {
+    const url = `${window.location.origin}/api/imports/webhook`;
+    navigator.clipboard.writeText(url).then(() => {
+      addToast("success", "Webhook URL copied to clipboard");
+    });
+  }, [addToast]);
+
+  const imports: ImportRecord[] = useMemo(() => data?.data ?? [], [data]);
+
+  const columns: Column<ImportRecord>[] = useMemo(
+    () => [
+      {
+        key: "date",
+        header: "Date",
+        sortable: true,
+        sortValue: (imp) => new Date(imp.createdAt).getTime(),
+        render: (imp) => formatDateTime(imp.createdAt),
+      },
+      {
+        key: "source",
+        header: "Source",
+        render: (imp) => (
+          <span className="text-primary">
+            <strong>{imp.sourceType}</strong>
+          </span>
+        ),
+      },
+      {
+        key: "status",
+        header: "Status",
+        render: (imp) => (
+          <StatusBadge
+            variant={imp.status === "success" ? "success" : "danger"}
+            dot
+          >
+            {imp.status}
+          </StatusBadge>
+        ),
+      },
+      {
+        key: "summary",
+        header: "Summary",
+        render: (imp) => (
+          <span className="text-muted">
+            {imp.recordCount} processed
+            {imp.errorDetails ? `: ${imp.errorDetails}` : ""}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
     <>
-      <div className="page-header">
-        <h1 className="page-title">Bank Imports</h1>
-      </div>
+      <PageHeader title="Bank Imports" />
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 2fr",
-          gap: "var(--spacing-lg)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--spacing-lg)",
-          }}
-        >
+      <div className="grid-2 gap-md">
+        <div className="flex-col gap-md">
           <div className="card">
-            <h3
-              style={{
-                fontSize: "1.125rem",
-                fontWeight: 600,
-                marginBottom: "var(--spacing-md)",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              <Upload size={20} color="var(--primary)" />
-              Upload CSV Statement
-            </h3>
-            <p
-              style={{
-                fontSize: "0.875rem",
-                color: "var(--text-muted)",
-                marginBottom: "var(--spacing-md)",
-              }}
-            >
+            <div className="card-header">
+              <h3 className="card-header__title">
+                <Upload size={20} className="text-primary" />
+                Upload CSV Statement
+              </h3>
+            </div>
+            <p className="text-muted mb-md">
               Upload a bank statement in CSV format. The system will
               automatically match payments to players where possible and queue
               the rest for reconciliation.
@@ -101,74 +156,34 @@ export const ImportsPage = () => {
 
             <form onSubmit={handleUpload}>
               <div
-                style={{
-                  border: "2px dashed var(--border-color)",
-                  borderRadius: "8px",
-                  padding: "24px",
-                  textAlign: "center",
-                  marginBottom: "var(--spacing-md)",
-                  backgroundColor: "var(--bg-base)",
-                }}
+                className={`upload-zone ${dragOver ? "drag-over" : ""} ${file ? "upload-zone--selected" : ""}`}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
               >
                 <input
                   type="file"
                   accept=".csv"
                   id="csv-upload"
                   onChange={handleFileChange}
-                  style={{ display: "none" }}
+                  hidden
                 />
-                <label
-                  htmlFor="csv-upload"
-                  style={{
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "12px",
-                  }}
-                >
-                  <FileText
-                    size={48}
-                    color={file ? "var(--primary)" : "var(--text-muted)"}
-                  />
-                  <span
-                    style={{
-                      fontWeight: 500,
-                      color: file
-                        ? "var(--text-primary)"
-                        : "var(--text-secondary)",
-                    }}
-                  >
+                <label htmlFor="csv-upload" className="upload-zone__label">
+                  <div className="upload-zone__icon">
+                    <FileText size={48} />
+                  </div>
+                  <span className="upload-zone__text">
                     {file ? file.name : "Click to select CSV file"}
+                  </span>
+                  <span className="upload-zone__hint">
+                    or drag and drop here
                   </span>
                 </label>
               </div>
 
-              {error && (
-                <p
-                  className="error-text"
-                  style={{ marginBottom: "16px", fontSize: "0.875rem" }}
-                >
-                  {error}
-                </p>
-              )}
-              {success && (
-                <p
-                  style={{
-                    color: "var(--success)",
-                    marginBottom: "16px",
-                    fontSize: "0.875rem",
-                    fontWeight: 500,
-                  }}
-                >
-                  {success}
-                </p>
-              )}
-
               <button
                 type="submit"
-                className="btn btn-primary"
-                style={{ width: "100%" }}
+                className={`btn btn-primary mt-md ${uploading ? "btn-loading" : ""}`}
                 disabled={!file || uploading}
               >
                 {uploading ? "Processing..." : "Upload & Analyze"}
@@ -177,203 +192,47 @@ export const ImportsPage = () => {
           </div>
 
           <div className="card">
-            <h3
-              style={{
-                fontSize: "1.125rem",
-                fontWeight: 600,
-                marginBottom: "var(--spacing-md)",
-              }}
-            >
-              Webhook Integrations
-            </h3>
-            <p
-              style={{
-                fontSize: "0.875rem",
-                color: "var(--text-secondary)",
-                marginBottom: "var(--spacing-sm)",
-              }}
-            >
+            <div className="card-header">
+              <h3 className="card-header__title">Webhook Integrations</h3>
+            </div>
+            <p className="text-secondary mb-sm">
               You can automatically import transactions via Zapier or Make.com
               by sending a POST request to:
             </p>
-            <code
-              style={{
-                display: "block",
-                padding: "12px",
-                backgroundColor: "var(--bg-base)",
-                borderRadius: "6px",
-                fontSize: "0.75rem",
-                wordBreak: "break-all",
-                marginBottom: "var(--spacing-sm)",
-                border: "1px solid var(--border-color)",
-              }}
-            >
-              {window.location.origin}/api/imports/webhook
-            </code>
-            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
-              Requires the Webhook Secret to be passed in the `x-webhook-secret`
-              header.
+            <div className="input-group mb-sm">
+              <code className="input-group__code">
+                {window.location.origin}/api/imports/webhook
+              </code>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm btn-icon"
+                onClick={handleCopyWebhookUrl}
+                title="Copy URL"
+              >
+                <Copy size={16} />
+              </button>
+            </div>
+            <p className="form-hint">
+              Requires the Webhook Secret to be passed in the
+              `x-webhook-secret` header.
             </p>
           </div>
         </div>
 
         <div className="card">
-          <h3
-            style={{
-              fontSize: "1.125rem",
-              fontWeight: 600,
-              marginBottom: "var(--spacing-md)",
-            }}
-          >
-            Import History
-          </h3>
-
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                textAlign: "left",
-              }}
-            >
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                  <th
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Date
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Source
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Status
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--text-secondary)",
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    Summary
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      style={{ padding: "16px", textAlign: "center" }}
-                    >
-                      Loading...
-                    </td>
-                  </tr>
-                ) : data?.data?.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      style={{
-                        padding: "16px",
-                        textAlign: "center",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      No imports recorded.
-                    </td>
-                  </tr>
-                ) : (
-                  data?.data?.map(
-                    (imp: {
-                      id: string;
-                      createdAt: string;
-                      sourceType: string;
-                      status: string;
-                      recordCount: number;
-                      errorDetails?: string;
-                    }) => (
-                      <tr
-                        key={imp.id}
-                        style={{
-                          borderBottom: "1px solid var(--border-color)",
-                        }}
-                      >
-                        <td style={{ padding: "16px", fontSize: "0.875rem" }}>
-                          {new Date(imp.createdAt).toLocaleString()}
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px",
-                            textTransform: "capitalize",
-                            fontWeight: 500,
-                          }}
-                        >
-                          {imp.sourceType}
-                        </td>
-                        <td style={{ padding: "16px" }}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "6px",
-                            }}
-                          >
-                            {imp.status === "success" ? (
-                              <CheckCircle size={16} color="var(--success)" />
-                            ) : (
-                              <XCircle size={16} color="var(--danger)" />
-                            )}
-                            <span
-                              style={{
-                                fontSize: "0.875rem",
-                                color:
-                                  imp.status === "success"
-                                    ? "var(--success)"
-                                    : "var(--danger)",
-                              }}
-                            >
-                              {imp.status}
-                            </span>
-                          </div>
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px",
-                            fontSize: "0.875rem",
-                            color: "var(--text-muted)",
-                          }}
-                        >
-                          {imp.recordCount} processed
-                          {imp.errorDetails ? `: ${imp.errorDetails}` : ""}
-                        </td>
-                      </tr>
-                    ),
-                  )
-                )}
-              </tbody>
-            </table>
+          <div className="card-header">
+            <h3 className="card-header__title">Import History</h3>
           </div>
+
+          <DataTable<ImportRecord>
+            columns={columns}
+            data={imports}
+            isLoading={isLoading}
+            getRowId={(imp) => imp.id}
+            emptyIcon={<FileText size={48} />}
+            emptyTitle="No imports recorded"
+            emptyDescription="Upload a bank CSV or configure a webhook to get started."
+          />
         </div>
       </div>
     </>
