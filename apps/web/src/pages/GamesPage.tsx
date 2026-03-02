@@ -2,26 +2,23 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import {
-  Plus,
-  Calendar as CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Plus, Calendar as CalendarIcon } from "lucide-react";
+import { Modal } from "../components/Modal";
 
 export const GamesPage = () => {
-  const [page, setPage] = useState(0);
-  const limit = 20;
+  const [showGameModal, setShowGameModal] = useState(false);
+  const [newGameDate, setNewGameDate] = useState(
+    new Date().toISOString().substring(0, 10),
+  );
+  const [newGameFee, setNewGameFee] = useState("");
 
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["games", page],
+    queryKey: ["games"],
     queryFn: async () => {
-      const { data } = await api.get(
-        `/games?limit=${limit}&offset=${page * limit}`,
-      );
+      const { data } = await api.get(`/games?limit=10000`);
       return data;
     },
   });
@@ -59,21 +56,17 @@ export const GamesPage = () => {
 
   const handleCreateGame = () => {
     const defaultFee = settings?.current_game_fee_cents || 1000;
-    const dateInput = window.prompt(
-      "Enter game date (YYYY-MM-DD):",
-      new Date().toISOString().substring(0, 10),
-    );
-    if (dateInput?.trim()) {
-      const feeInput = window.prompt(
-        `Enter fee in cents (default: ${defaultFee}):`,
-        defaultFee.toString(),
-      );
-      if (feeInput !== null && !isNaN(Number(feeInput))) {
-        createGameMutation.mutate({
-          gameDate: dateInput.trim(),
-          feeCents: Number(feeInput),
-        });
-      }
+    setNewGameDate(new Date().toISOString().substring(0, 10));
+    setNewGameFee(defaultFee.toString());
+    setShowGameModal(true);
+  };
+
+  const submitGame = () => {
+    if (newGameDate.trim() && newGameFee !== "" && !isNaN(Number(newGameFee))) {
+      createGameMutation.mutate({
+        gameDate: newGameDate.trim(),
+        feeCents: Number(newGameFee),
+      });
     }
   };
 
@@ -262,44 +255,91 @@ export const GamesPage = () => {
             </tbody>
           </table>
         </div>
-
-        {data && data.total > limit && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "16px",
-              borderTop: "1px solid var(--border-color)",
-            }}
-          >
-            <span
-              style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}
-            >
-              Showing {data.offset + 1} to{" "}
-              {Math.min(data.offset + limit, data.total)} of {data.total}
-            </span>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                className="btn btn-outline"
-                style={{ padding: "4px 8px" }}
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                className="btn btn-outline"
-                style={{ padding: "4px 8px" }}
-                disabled={(page + 1) * limit >= data.total}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      <Modal
+        isOpen={showGameModal}
+        title="Create New Game"
+        onClose={() => setShowGameModal(false)}
+        footer={
+          <>
+            <button
+              className="btn btn-outline"
+              onClick={() => setShowGameModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={
+                !newGameDate.trim() ||
+                newGameFee === "" ||
+                isNaN(Number(newGameFee)) ||
+                createGameMutation.isPending
+              }
+              onClick={() => {
+                submitGame();
+                setShowGameModal(false);
+              }}
+            >
+              Create Game
+            </button>
+          </>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+              }}
+            >
+              Game Date (YYYY-MM-DD)
+            </label>
+            <input
+              type="text"
+              className="input-field"
+              value={newGameDate}
+              onChange={(e) => setNewGameDate(e.target.value)}
+              placeholder="e.g. 2025-01-01"
+            />
+          </div>
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+              }}
+            >
+              Fee (in cents)
+            </label>
+            <input
+              type="number"
+              className="input-field"
+              value={newGameFee}
+              onChange={(e) => setNewGameFee(e.target.value)}
+              placeholder="e.g. 1000"
+              onKeyDown={(e) => {
+                if (
+                  e.key === "Enter" &&
+                  newGameDate.trim() &&
+                  newGameFee !== "" &&
+                  !isNaN(Number(newGameFee)) &&
+                  !createGameMutation.isPending
+                ) {
+                  submitGame();
+                  setShowGameModal(false);
+                }
+              }}
+            />
+          </div>
+        </div>
+      </Modal>
     </>
   );
 };

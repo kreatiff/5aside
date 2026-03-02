@@ -10,6 +10,7 @@ import {
   Lock,
   Save,
 } from "lucide-react";
+import { Modal } from "../components/Modal";
 
 type GameDetails = {
   id: string;
@@ -32,6 +33,7 @@ export const GameDetailPage = () => {
   const [isEditingFee, setIsEditingFee] = useState(false);
   const [feeInput, setFeeInput] = useState("");
   const [importText, setImportText] = useState("");
+  const [showImportSuccessModal, setShowImportSuccessModal] = useState(false);
 
   const { data: game, isLoading } = useQuery({
     queryKey: ["games", id],
@@ -60,9 +62,9 @@ export const GameDetailPage = () => {
       queryClient.invalidateQueries({ queryKey: ["games", id] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
-      alert(
-        "Import successful. Check Reconciliation Queue for mismatched names.",
-      );
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+      setShowImportSuccessModal(true);
     },
   });
 
@@ -433,6 +435,26 @@ export const GameDetailPage = () => {
           </form>
         </div>
       </div>
+
+      <Modal
+        isOpen={showImportSuccessModal}
+        title="Import Successful"
+        onClose={() => setShowImportSuccessModal(false)}
+        footer={
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowImportSuccessModal(false)}
+          >
+            OK
+          </button>
+        }
+      >
+        <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+          The attendance has been imported successfully. Please check the
+          Reconciliation Queue for any mismatched names that need to be manually
+          linked to player profiles.
+        </p>
+      </Modal>
     </>
   );
 };

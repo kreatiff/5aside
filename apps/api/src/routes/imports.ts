@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { CsvBankUploadSchema, BankImportSchema, WebhookBankSchema, WebhookAttendanceSchema } from "@fiveaside/contracts";
-import { parseCsvLines, matchPlayerByAlias, isChargeableStatus } from "@fiveaside/recon";
+import { parseCsvLines, matchPlayerByAlias, isChargeableStatus, MatchCandidate } from "@fiveaside/recon";
 import { parseBody, assertWebhookSecret } from "../utils/request.js";
 import { withTransaction, query } from "../db/helpers.js";
 import { processBankRows } from "../services/bank-import.js";
@@ -54,13 +54,19 @@ export async function importRoutes(app: FastifyInstance) {
       );
       const importId = importRow.rows[0]!.id;
 
-      const aliases = await client.query<{ player_id: string; alias_normalized: string }>(
-        `SELECT player_id, alias_normalized FROM player_aliases`
+      const aliases = await client.query<{ player_id: string; alias_raw: string }>(
+        `SELECT player_id, alias_raw FROM player_aliases`
       );
-      const candidates = aliases.rows.map((row) => ({
-        playerId: row.player_id,
-        aliasNormalized: row.alias_normalized
-      }));
+      const players = await client.query<{ id: string; display_name: string }>(
+        `SELECT id, display_name FROM players`
+      );
+      const candidates: MatchCandidate[] = [];
+      for (const p of players.rows) {
+        if (p.display_name) candidates.push({ playerId: p.id, aliasRaw: p.display_name });
+      }
+      for (const row of aliases.rows) {
+        if (row.alias_raw) candidates.push({ playerId: row.player_id, aliasRaw: row.alias_raw });
+      }
 
       const { posted, queued } = await processBankRows(client, parsed.rows, candidates);
 
@@ -86,13 +92,19 @@ export async function importRoutes(app: FastifyInstance) {
       );
       const importId = importRow.rows[0]!.id;
 
-      const aliases = await client.query<{ player_id: string; alias_normalized: string }>(
-        `SELECT player_id, alias_normalized FROM player_aliases`
+      const aliases = await client.query<{ player_id: string; alias_raw: string }>(
+        `SELECT player_id, alias_raw FROM player_aliases`
       );
-      const candidates = aliases.rows.map((row) => ({
-        playerId: row.player_id,
-        aliasNormalized: row.alias_normalized
-      }));
+      const players = await client.query<{ id: string; display_name: string }>(
+        `SELECT id, display_name FROM players`
+      );
+      const candidates: MatchCandidate[] = [];
+      for (const p of players.rows) {
+        if (p.display_name) candidates.push({ playerId: p.id, aliasRaw: p.display_name });
+      }
+      for (const row of aliases.rows) {
+        if (row.alias_raw) candidates.push({ playerId: row.player_id, aliasRaw: row.alias_raw });
+      }
 
       const { posted, queued } = await processBankRows(client, parsed.rows, candidates);
 
@@ -115,13 +127,19 @@ export async function importRoutes(app: FastifyInstance) {
       }
       const feeCents = gameResult.rows[0]!.fee_cents;
 
-      const aliases = await client.query<{ player_id: string; alias_normalized: string }>(
-        `SELECT player_id, alias_normalized FROM player_aliases`
+      const aliases = await client.query<{ player_id: string; alias_raw: string }>(
+        `SELECT player_id, alias_raw FROM player_aliases`
       );
-      const candidates = aliases.rows.map((row) => ({
-        playerId: row.player_id,
-        aliasNormalized: row.alias_normalized
-      }));
+      const players = await client.query<{ id: string; display_name: string }>(
+        `SELECT id, display_name FROM players`
+      );
+      const candidates: MatchCandidate[] = [];
+      for (const p of players.rows) {
+        if (p.display_name) candidates.push({ playerId: p.id, aliasRaw: p.display_name });
+      }
+      for (const row of aliases.rows) {
+        if (row.alias_raw) candidates.push({ playerId: row.player_id, aliasRaw: row.alias_raw });
+      }
 
       let imported = 0;
       let charged = 0;

@@ -1,13 +1,16 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { ArrowLeft, UserCircle, Plus } from "lucide-react";
+import { Modal } from "../components/Modal";
 
 type PlayerDetails = {
   id: string;
   displayName: string;
   createdAt: string;
   currentBalanceCents: number;
+  active: boolean;
 };
 
 type Alias = {
@@ -19,6 +22,20 @@ type Alias = {
 export const PlayerDetailPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
+  const [mergeSelection, setMergeSelection] = useState<string[]>([]);
+  const [showConfirmMerge, setShowConfirmMerge] = useState(false);
+  const [showAliasModal, setShowAliasModal] = useState(false);
+  const [aliasInput, setAliasInput] = useState("");
+
+  const { data: allPlayers } = useQuery({
+    queryKey: ["players-all"],
+    queryFn: async () => {
+      const { data } = await api.get<{ data: PlayerDetails[] }>(
+        `/players?limit=1000`,
+      );
+      return data.data;
+    },
+  });
 
   const { data: player, isLoading } = useQuery({
     queryKey: ["players", id],
@@ -63,10 +80,42 @@ export const PlayerDetailPage = () => {
     },
   });
 
+  const updatePlayerMutation = useMutation({
+    mutationFn: async (updates: Partial<PlayerDetails>) => {
+      await api.patch(`/players/${id}`, updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["players", id] });
+    },
+  });
+
+  const mergeMutation = useMutation({
+    mutationFn: async ({
+      sourcePlayerIds,
+      targetPlayerId,
+    }: {
+      sourcePlayerIds: string[];
+      targetPlayerId: string;
+    }) => {
+      await api.post(`/players/merge`, { sourcePlayerIds, targetPlayerId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      setMergeSelection([]);
+      setShowConfirmMerge(false);
+    },
+  });
+
   const handleAddAlias = () => {
-    const raw = window.prompt("Enter new alias (e.g. facebook name):");
-    if (raw?.trim()) {
-      addAliasMutation.mutate({ source: "facebook", aliasRaw: raw.trim() });
+    setShowAliasModal(true);
+  };
+
+  const submitAlias = () => {
+    if (aliasInput.trim()) {
+      addAliasMutation.mutate({
+        source: "facebook",
+        aliasRaw: aliasInput.trim(),
+      });
     }
   };
 
@@ -109,12 +158,27 @@ export const PlayerDetailPage = () => {
 
       <div className="page-header">
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <UserCircle size={48} color="var(--primary)" />
+          <UserCircle
+            size={48}
+            color={player.active ? "var(--primary)" : "var(--text-muted)"}
+          />
           <div>
-            <h1 className="page-title" style={{ marginBottom: 0 }}>
-              {player.displayName}
-            </h1>
-            <p style={{ color: "var(--text-secondary)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <h1 className="page-title" style={{ marginBottom: 0 }}>
+                {player.displayName}
+              </h1>
+              <button
+                className={`btn btn-sm ${player.active ? "btn-outline" : "btn-secondary"}`}
+                style={{ padding: "4px 8px", fontSize: "0.75rem" }}
+                onClick={() =>
+                  updatePlayerMutation.mutate({ active: !player.active })
+                }
+                disabled={updatePlayerMutation.isPending}
+              >
+                {player.active ? "Active" : "Inactive"}
+              </button>
+            </div>
+            <p style={{ color: "var(--text-secondary)", marginTop: "4px" }}>
               Added {new Date(player.createdAt).toLocaleDateString()}
             </p>
           </div>
@@ -136,6 +200,167 @@ export const PlayerDetailPage = () => {
           >
             {formatCurrency(player.currentBalanceCents)}
           </p>
+        </div>
+      </div>
+
+      {/* Merge Controls */}
+      <div
+        style={{
+          marginBottom: "var(--spacing-lg)",
+          padding: "16px",
+          backgroundColor: "var(--bg-base)",
+          border: "1px solid var(--border-color)",
+          borderRadius: "8px",
+        }}
+      >
+        <h4
+          style={{ marginBottom: "8px", fontSize: "0.875rem", fontWeight: 600 }}
+        >
+          Merge Duplicate Profiles
+        </h4>
+        <p
+          style={{
+            fontSize: "0.75rem",
+            color: "var(--text-muted)",
+            marginBottom: "12px",
+          }}
+        >
+          Select duplicates from the list below to merge into this profile. The
+          selected profiles will be permanently deleted and all of their
+          ledgers, aliases, and attendance records will be cleanly transferred
+          here.
+        </p>
+        <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+          <div
+            style={{
+              minHeight: "120px",
+              maxHeight: "300px",
+              overflowY: "auto",
+              fontSize: "0.875rem",
+              flex: 1,
+              padding: "8px",
+              backgroundColor: "var(--bg-elevated)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "4px",
+            }}
+          >
+            {allPlayers
+              ?.filter((p) => p.id !== id)
+              .map((p) => (
+                <label
+                  key={p.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "4px 0",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={mergeSelection.includes(p.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setMergeSelection([...mergeSelection, p.id]);
+                      } else {
+                        setMergeSelection(
+                          mergeSelection.filter(
+                            (selectedId) => selectedId !== p.id,
+                          ),
+                        );
+                      }
+                    }}
+                    disabled={mergeMutation.isPending}
+                  />
+                  {p.displayName}
+                </label>
+              ))}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+              width: "200px",
+            }}
+          >
+            {!showConfirmMerge ? (
+              <button
+                className="btn btn-primary"
+                disabled={mergeMutation.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (mergeSelection.length === 0) {
+                    window.alert(
+                      "Please select at least one duplicate profile from the list to merge.",
+                    );
+                    return;
+                  }
+                  setShowConfirmMerge(true);
+                }}
+              >
+                Merge {mergeSelection.length} Profile
+                {mergeSelection.length !== 1 ? "s" : ""}
+              </button>
+            ) : (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+              >
+                <p
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "var(--warning)",
+                    fontWeight: 600,
+                    textAlign: "center",
+                    margin: "0 0 4px 0",
+                  }}
+                >
+                  Are you absolutely sure?
+                </p>
+                <button
+                  className="btn"
+                  style={{
+                    backgroundColor: "var(--danger)",
+                    color: "white",
+                    borderColor: "var(--danger)",
+                  }}
+                  disabled={mergeMutation.isPending}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    mergeMutation.mutate({
+                      sourcePlayerIds: mergeSelection,
+                      targetPlayerId: id!,
+                    });
+                  }}
+                >
+                  Yes, Delete & Merge
+                </button>
+                <button
+                  className="btn btn-outline"
+                  disabled={mergeMutation.isPending}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowConfirmMerge(false);
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {!showConfirmMerge && (
+              <button
+                className="btn btn-outline"
+                disabled={
+                  mergeSelection.length === 0 || mergeMutation.isPending
+                }
+                onClick={() => setMergeSelection([])}
+              >
+                Clear Selection
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -359,6 +584,71 @@ export const PlayerDetailPage = () => {
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={showAliasModal}
+        title="Add New Alias"
+        onClose={() => setShowAliasModal(false)}
+        footer={
+          <>
+            <button
+              className="btn btn-outline"
+              onClick={() => setShowAliasModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={!aliasInput.trim() || addAliasMutation.isPending}
+              onClick={() => {
+                submitAlias();
+                setShowAliasModal(false);
+                setAliasInput("");
+              }}
+            >
+              Add Alias
+            </button>
+          </>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+            Enter a new alias for this player (e.g., their Facebook or Meetup
+            name) so the system can automatically match their attendances.
+          </p>
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+              }}
+            >
+              Alias Name
+            </label>
+            <input
+              type="text"
+              className="input-field"
+              value={aliasInput}
+              onChange={(e) => setAliasInput(e.target.value)}
+              placeholder="e.g. John Smith"
+              autoFocus
+              onKeyDown={(e) => {
+                if (
+                  e.key === "Enter" &&
+                  aliasInput.trim() &&
+                  !addAliasMutation.isPending
+                ) {
+                  submitAlias();
+                  setShowAliasModal(false);
+                  setAliasInput("");
+                }
+              }}
+            />
+          </div>
+        </div>
+      </Modal>
     </>
   );
 };

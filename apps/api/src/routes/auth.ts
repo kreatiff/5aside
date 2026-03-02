@@ -3,6 +3,7 @@ import { LoginSchema, MfaVerifySchema, RefreshSchema } from "@fiveaside/contract
 import { query } from "../db/helpers.js";
 import { parseBody } from "../utils/request.js";
 import { verifyPassword, verifyTotp, generateRefreshToken, hashToken } from "../services/auth.js";
+import { env } from "../config.js";
 
 const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
@@ -124,6 +125,14 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/auth/refresh", async (request, reply) => {
+    if (env.DISABLE_AUTH === "true") {
+      const accessToken = app.jwt.sign(
+        { sub: "dev-admin", email: "dev@localhost", role: "admin" },
+        { expiresIn: ACCESS_TOKEN_EXPIRY }
+      );
+      return { accessToken };
+    }
+
     const body: any = request.body || {};
     const refreshToken = request.cookies.refreshToken || body.refreshToken;
 

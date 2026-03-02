@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { GameCreateSchema, GameUpdateSchema, AttendanceImportSchema } from "@fiveaside/contracts";
-import { matchPlayerByAlias, isChargeableStatus } from "@fiveaside/recon";
+import { matchPlayerByAlias, isChargeableStatus, MatchCandidate } from "@fiveaside/recon";
 import { query, withTransaction } from "../db/helpers.js";
 import { mapGame, type GameRow } from "../utils/mappers.js";
 import { parseBody, parseUuidParam } from "../utils/request.js";
@@ -149,13 +149,19 @@ export async function gameRoutes(app: FastifyInstance) {
       }
       const feeCents = gameResult.rows[0]!.fee_cents;
 
-      const aliases = await client.query<{ player_id: string; alias_normalized: string }>(
-        `SELECT player_id, alias_normalized FROM player_aliases`
+      const aliases = await client.query<{ player_id: string; alias_raw: string }>(
+        `SELECT player_id, alias_raw FROM player_aliases`
       );
-      const candidates = aliases.rows.map((row) => ({
-        playerId: row.player_id,
-        aliasNormalized: row.alias_normalized
-      }));
+      const players = await client.query<{ id: string; display_name: string }>(
+        `SELECT id, display_name FROM players`
+      );
+      const candidates: MatchCandidate[] = [];
+      for (const p of players.rows) {
+        if (p.display_name) candidates.push({ playerId: p.id, aliasRaw: p.display_name });
+      }
+      for (const row of aliases.rows) {
+        if (row.alias_raw) candidates.push({ playerId: row.player_id, aliasRaw: row.alias_raw });
+      }
 
       let imported = 0;
       let charged = 0;

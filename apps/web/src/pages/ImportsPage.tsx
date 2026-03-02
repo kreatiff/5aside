@@ -14,7 +14,7 @@ export const ImportsPage = () => {
   const { data, isLoading } = useQuery({
     queryKey: ["imports"],
     queryFn: async () => {
-      const { data } = await api.get(`/imports?limit=20`);
+      const { data } = await api.get(`/imports?limit=10000`);
       return data;
     },
   });

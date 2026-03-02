@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { PlayerCreateSchema, PlayerUpdateSchema, PlayerAliasCreateSchema } from "@fiveaside/contracts";
 import { normalizeName } from "@fiveaside/recon";
-import { query } from "../db/helpers.js";
+import { query, withTransaction } from "../db/helpers.js";
+import { rescanPendingTransactionsForPlayer } from "../services/bank-import.js";
 import { mapPlayer, type PlayerRow } from "../utils/mappers.js";
 import { parseBody, parseUuidParam } from "../utils/request.js";
+import { pool } from "../db/pool.js";
+import { z } from "zod";
 
 export async function playerRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
@@ -11,14 +14,18 @@ export async function playerRoutes(app: FastifyInstance) {
   app.get("/api/players", async (request) => {
     const limit = Number((request.query as any).limit) || 50;
     const offset = Number((request.query as any).offset) || 0;
+    const activeOnly = (request.query as any).active === 'true';
 
-    const countResult = await query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM players`);
+    const countQuery = activeOnly ? `SELECT COUNT(*)::text AS count FROM players WHERE active = true` : `SELECT COUNT(*)::text AS count FROM players`;
+    const countResult = await query<{ count: string }>(countQuery);
     const total = Number(countResult.rows[0]?.count || 0);
 
+    const whereClause = activeOnly ? `WHERE p.active = true` : ``;
     const result = await query<PlayerRow & { last_game_date: string | null }>(
       `SELECT p.id, p.display_name, p.active, p.current_balance_cents, p.notes, p.created_at, p.updated_at,
               (SELECT MAX(g.game_date)::text FROM attendance a JOIN games g ON g.id = a.game_id WHERE a.player_id = p.id) AS last_game_date
        FROM players p
+       ${whereClause}
        ORDER BY p.display_name ASC
        LIMIT $1 OFFSET $2`,
       [limit, offset]
@@ -44,6 +51,25 @@ export async function playerRoutes(app: FastifyInstance) {
     );
     reply.code(201);
     return { player: mapPlayer(result.rows[0]!) };
+  });
+
+  app.patch("/api/players/bulk-status", async (request, reply) => {
+    const bodySchema = z.object({
+      playerIds: z.array(z.string().uuid()),
+      isActive: z.boolean(),
+    });
+    const body = parseBody(reply, bodySchema, request.body);
+
+    if (body.playerIds.length === 0) {
+      return { updated: 0 };
+    }
+
+    const result = await query(
+      `UPDATE players SET active = $1 WHERE id = ANY($2)`,
+      [body.isActive, body.playerIds]
+    );
+
+    return { updated: result.rowCount };
   });
 
   app.get("/api/players/:id", async (request, reply) => {
@@ -126,6 +152,53 @@ export async function playerRoutes(app: FastifyInstance) {
     };
   });
 
+  app.post("/api/players/:id/aliases", async (request, reply) => {
+    const id = parseUuidParam(request, reply, "id");
+    const body = request.body as { source?: string; aliasRaw?: string };
+    
+    if (!body || !body.source || !body.aliasRaw) {
+      throw reply.badRequest("source and aliasRaw are required");
+    }
+
+    const { source, aliasRaw } = body;
+    const aliasNormalized = aliasRaw.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    const result = await withTransaction(async (client) => {
+      // 1. Insert the new alias
+      const insertResult = await client.query<{
+        id: string;
+        player_id: string;
+        source: string;
+        alias_raw: string;
+        alias_normalized: string;
+        created_at: Date;
+      }>(
+        `INSERT INTO player_aliases (player_id, source, alias_raw, alias_normalized)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, player_id, source, alias_raw, alias_normalized, created_at`,
+        [id, source, aliasRaw, aliasNormalized]
+      );
+      
+      // 2. Rescan the reconciliation queue for this player
+      const mappedCount = await rescanPendingTransactionsForPlayer(client, id);
+      
+      return { aliasRow: insertResult.rows[0]!, mappedCount };
+    });
+
+    const r = result.aliasRow;
+    return reply.status(201).send({
+      alias: {
+        id: r.id,
+        playerId: r.player_id,
+        sourceType: r.source,
+        aliasRaw: r.alias_raw,
+        aliasNormalized: r.alias_normalized,
+        createdAt: r.created_at
+      },
+      transactionsMapped: result.mappedCount
+    });
+  });
+
   app.get("/api/players/:id/ledger", async (request, reply) => {
     const id = parseUuidParam(request, reply, "id");
     const limit = Number((request.query as any).limit) || 50;
@@ -159,4 +232,85 @@ export async function playerRoutes(app: FastifyInstance) {
       offset
     };
   });
+
+  app.post("/api/players/merge", async (request, reply) => {
+    const body = parseBody(
+      reply,
+      z.object({
+        sourcePlayerIds: z.array(z.string().uuid()).min(1),
+        targetPlayerId: z.string().uuid()
+      }),
+      request.body
+    );
+
+    const { sourcePlayerIds, targetPlayerId } = body;
+    
+    if (sourcePlayerIds.includes(targetPlayerId)) {
+      throw reply.badRequest("Source and target cannot be the same");
+    }
+
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      for (const sourceId of sourcePlayerIds) {
+        // Move aliases (ignore exact match conflicts)
+        await client.query(`
+          UPDATE player_aliases src SET player_id = $1 
+          WHERE player_id = $2 AND NOT EXISTS (
+            SELECT 1 FROM player_aliases tgt 
+            WHERE tgt.player_id = $1 
+              AND tgt.source = src.source 
+              AND tgt.alias_normalized = src.alias_normalized
+          )
+        `, [targetPlayerId, sourceId]);
+        await client.query(`DELETE FROM player_aliases WHERE player_id = $1`, [sourceId]);
+
+        // Move ledger entries
+        await client.query(`UPDATE ledger_entries SET player_id = $1 WHERE player_id = $2`, [targetPlayerId, sourceId]);
+
+        // Delete clashing attendance records
+        await client.query(`
+          DELETE FROM attendance 
+          WHERE player_id = $2 AND game_id IN (
+            SELECT game_id FROM attendance WHERE player_id = $1
+          )
+        `, [targetPlayerId, sourceId]);
+        
+        // Move remaining attendance
+        await client.query(`UPDATE attendance SET player_id = $1 WHERE player_id = $2`, [targetPlayerId, sourceId]);
+
+        // Delete source player
+        await client.query(`DELETE FROM players WHERE id = $1`, [sourceId]);
+      }
+
+      // Recalculate target balance by summarizing all ledgers
+      await client.query(`
+        UPDATE players 
+        SET current_balance_cents = COALESCE((
+          SELECT SUM(
+            CASE 
+              WHEN type = 'charge' THEN amount_cents
+              WHEN type = 'payment' THEN -amount_cents
+              WHEN type = 'adjustment' THEN amount_cents
+              ELSE 0
+            END
+          ) FROM ledger_entries WHERE player_id = $1
+        ), 0)
+        WHERE id = $1
+      `, [targetPlayerId]);
+
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    reply.code(200);
+    return { success: true };
+  });
+
 }

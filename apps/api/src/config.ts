@@ -16,7 +16,8 @@ const EnvSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(16),
   WEBHOOK_SHARED_SECRET: z.string().min(16).default("dev-webhook-secret"),
   DEFAULT_GAME_FEE_CENTS: z.coerce.number().int().positive().default(1000),
-  APP_TIMEZONE: z.string().default("America/New_York")
+  APP_TIMEZONE: z.string().default("America/New_York"),
+  DISABLE_AUTH: z.string().optional()
 });
 
 export const env = EnvSchema.parse(process.env);

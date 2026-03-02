@@ -12,6 +12,7 @@ import {
 export const SettingsPage = () => {
   const queryClient = useQueryClient();
   const [feeInput, setFeeInput] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ["settings"],
@@ -42,7 +43,8 @@ export const SettingsPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
-      alert("Settings updated successfully.");
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     },
   });
 
@@ -133,14 +135,31 @@ export const SettingsPage = () => {
               />
             </div>
 
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={updateSettingsMutation.isPending}
-            >
-              <Save size={16} />{" "}
-              {updateSettingsMutation.isPending ? "Saving..." : "Save Settings"}
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={updateSettingsMutation.isPending}
+              >
+                <Save size={16} />{" "}
+                {updateSettingsMutation.isPending
+                  ? "Saving..."
+                  : "Save Settings"}
+              </button>
+              {saveSuccess && (
+                <span
+                  style={{
+                    color: "var(--success)",
+                    fontSize: "0.875rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <Check size={16} /> Settings saved
+                </span>
+              )}
+            </div>
           </form>
         </div>
 

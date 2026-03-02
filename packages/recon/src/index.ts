@@ -1,6 +1,6 @@
 export type MatchCandidate = {
   playerId: string;
-  aliasNormalized: string;
+  aliasRaw: string;
 };
 
 export type MatchResult = {
@@ -16,48 +16,87 @@ export function normalizeName(raw: string): string {
   return raw.toLowerCase().trim().replace(NON_WORD_REGEX, " ").replace(/\s+/g, " ").trim();
 }
 
-function tokenSet(input: string): Set<string> {
-  return new Set(normalizeName(input).split(" ").filter(Boolean));
+function splitIntoWords(input: string): string[] {
+  return input.toLowerCase().replace(NON_WORD_REGEX, " ").split(" ").filter(w => w.length > 0);
 }
 
-function jaccard(left: Set<string>, right: Set<string>): number {
-  if (left.size === 0 || right.size === 0) return 0;
-  let intersection = 0;
-  for (const token of left) {
-    if (right.has(token)) {
-      intersection += 1;
-    }
-  }
-  const union = left.size + right.size - intersection;
-  return union === 0 ? 0 : intersection / union;
-}
+// Noise words commonly seen in bank descriptions
+const STOP_WORDS = new Set([
+  "osko", "from", "ref", "no", "payment", "transfer", "to", "via", 
+  "internet", "credit", "debit", "receipt", "reference", "date", "effective", "for", "the"
+]);
 
 export function matchPlayerByAlias(rawName: string, candidates: MatchCandidate[]): MatchResult {
-  const normalized = normalizeName(rawName);
-  const exact = candidates.find((candidate) => candidate.aliasNormalized === normalized);
-  if (exact) {
-    return { matched: true, playerId: exact.playerId, confidence: 1, reason: "exact_alias_match" };
-  }
+  const txnWords = splitIntoWords(rawName).filter(w => !STOP_WORDS.has(w));
+  const txnWordSet = new Set(txnWords);
+  const spacelessTxn = rawName.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-  const sourceTokens = tokenSet(rawName);
-  let best: { playerId: string; score: number } | null = null;
+  let bestMatch: { playerId: string; matchCount: number; aliasWordCount: number; isExact: boolean } | null = null;
+
   for (const candidate of candidates) {
-    const score = jaccard(sourceTokens, tokenSet(candidate.aliasNormalized));
-    if (!best || score > best.score) {
-      best = { playerId: candidate.playerId, score };
+    const normalizedAlias = candidate.aliasRaw.toLowerCase().replace(/[^a-z0-9]/g, "");
+    
+    // 1. Exact spaceless substring match
+    if (spacelessTxn.includes(normalizedAlias) && normalizedAlias.length >= 4) {
+      if (!bestMatch || !bestMatch.isExact) {
+        bestMatch = { playerId: candidate.playerId, matchCount: 999, aliasWordCount: 1, isExact: true };
+      }
+      continue;
+    }
+
+    // 2. Token Intersection
+    const aliasWords = splitIntoWords(candidate.aliasRaw).filter(w => !STOP_WORDS.has(w));
+    if (aliasWords.length === 0) continue;
+
+    let matchCount = 0;
+    for (const w of aliasWords) {
+      if (txnWordSet.has(w)) {
+        matchCount++;
+      }
+    }
+
+    let isViable = false;
+    if (aliasWords.length === 1) {
+      // Single word must be an exact token match and >= 4 chars to avoid false positives ("an", "mr")
+      if (matchCount === 1 && (aliasWords[0]?.length ?? 0) >= 4) isViable = true;
+    } else {
+      // Multi-word aliases must share at least 2 significant words,
+      // OR at least 1 significant word that is long enough (>= 5 chars) to be highly specific.
+      if (matchCount >= 2) {
+        isViable = true;
+      } else if (matchCount === 1) {
+        // Find which word matched and check its length
+        const matchedWord = aliasWords.find(w => txnWordSet.has(w));
+        if (matchedWord && matchedWord.length >= 5) {
+          isViable = true;
+        }
+      }
+    }
+
+    if (isViable) {
+      if (!bestMatch || (matchCount > bestMatch.matchCount && !bestMatch.isExact)) {
+        bestMatch = { playerId: candidate.playerId, matchCount, aliasWordCount: aliasWords.length, isExact: false };
+      } else if (bestMatch && matchCount === bestMatch.matchCount && !bestMatch.isExact) {
+        // Tie-breaker: higher percentage of matching words (less filler in the alias)
+        const currentRatio = matchCount / aliasWords.length;
+        const bestRatio = bestMatch.matchCount / bestMatch.aliasWordCount;
+        if (currentRatio > bestRatio) {
+          bestMatch = { playerId: candidate.playerId, matchCount, aliasWordCount: aliasWords.length, isExact: false };
+        }
+      }
     }
   }
 
-  if (!best || best.score < 0.5) {
-    return { matched: false, playerId: null, confidence: best?.score ?? 0, reason: "low_confidence" };
+  if (bestMatch) {
+    return {
+      matched: true,
+      playerId: bestMatch.playerId,
+      confidence: bestMatch.isExact ? 1 : 0.85,
+      reason: bestMatch.isExact ? "exact_substring_match" : "token_intersection_match"
+    };
   }
 
-  return {
-    matched: true,
-    playerId: best.playerId,
-    confidence: Number(best.score.toFixed(2)),
-    reason: "fuzzy_alias_match"
-  };
+  return { matched: false, playerId: null, confidence: 0, reason: "no_match" };
 }
 
 export function isChargeableStatus(sourceStatus: string): boolean {

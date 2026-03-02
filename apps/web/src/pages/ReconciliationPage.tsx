@@ -2,27 +2,15 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import {
-  AlertCircle,
-  Check,
-  X,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { AlertCircle, Check, X, Search, RefreshCw } from "lucide-react";
 
 export const ReconciliationPage = () => {
-  const [page, setPage] = useState(0);
-  const limit = 20;
-
   const queryClient = useQueryClient();
 
   const { data: queue, isLoading: loadingQueue } = useQuery({
-    queryKey: ["reconciliation", page],
+    queryKey: ["reconciliation"],
     queryFn: async () => {
-      const { data } = await api.get(
-        `/reconciliation-queue?limit=${limit}&offset=${page * limit}`,
-      );
+      const { data } = await api.get(`/reconciliation-queue?limit=10000`);
       return data;
     },
   });
@@ -56,6 +44,25 @@ export const ReconciliationPage = () => {
     },
   });
 
+  const [rescanSuccess, setRescanSuccess] = useState<string | null>(null);
+
+  const rescanMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post("/reconciliation-queue/rescan");
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      queryClient.invalidateQueries({ queryKey: ["games"] });
+      setRescanSuccess(
+        `Rescan complete. Mapped ${data.transactionsMapped} transactions.`,
+      );
+      setTimeout(() => setRescanSuccess(null), 5000);
+    },
+  });
+
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   const formatCurrency = (cents: number) => {
@@ -76,6 +83,33 @@ export const ReconciliationPage = () => {
             Items here require manual matching because the system couldn't
             confidently link them to a player.
           </p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {rescanSuccess && (
+            <span
+              style={{
+                color: "var(--success-color, #10b981)",
+                fontSize: "0.875rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              <Check size={16} /> {rescanSuccess}
+            </span>
+          )}
+          <button
+            className="btn btn-secondary"
+            onClick={() => rescanMutation.mutate()}
+            disabled={rescanMutation.isPending}
+            style={{ display: "flex", alignItems: "center", gap: "8px" }}
+          >
+            <RefreshCw
+              size={18}
+              className={rescanMutation.isPending ? "spin" : ""}
+            />
+            {rescanMutation.isPending ? "Rescanning..." : "Rescan Transactions"}
+          </button>
         </div>
       </div>
 
@@ -419,43 +453,6 @@ export const ReconciliationPage = () => {
             </tbody>
           </table>
         </div>
-
-        {queue && queue.total > limit && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "16px",
-              borderTop: "1px solid var(--border-color)",
-            }}
-          >
-            <span
-              style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}
-            >
-              Showing {queue.offset + 1} to{" "}
-              {Math.min(queue.offset + limit, queue.total)} of {queue.total}
-            </span>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                className="btn btn-outline"
-                style={{ padding: "4px 8px" }}
-                disabled={page === 0}
-                onClick={() => setPage((p: number) => p - 1)}
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                className="btn btn-outline"
-                style={{ padding: "4px 8px" }}
-                disabled={(page + 1) * limit >= queue.total}
-                onClick={() => setPage((p: number) => p + 1)}
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

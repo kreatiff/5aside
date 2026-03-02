@@ -2,13 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import {
-  Search,
-  Plus,
-  UserCircle,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Search, Plus, UserCircle } from "lucide-react";
+import { Modal } from "../components/Modal";
 
 type Player = {
   id: string;
@@ -27,18 +22,22 @@ type PaginatedPlayers = {
 };
 
 export const PlayersPage = () => {
-  const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
-  const limit = 20;
+  const [filter, setFilter] = useState<"active" | "all">("active");
+  const [showPlayerModal, setShowPlayerModal] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["players", page],
+    queryKey: ["players", filter],
     queryFn: async () => {
       const { data } = await api.get<PaginatedPlayers>(
-        `/players?limit=${limit}&offset=${page * limit}`,
+        `/players?limit=10000${filter === "active" ? "&active=true" : ""}`,
       );
       return data;
     },
@@ -54,6 +53,26 @@ export const PlayersPage = () => {
     },
   });
 
+  const bulkStatusMutation = useMutation({
+    mutationFn: async ({
+      playerIds,
+      isActive,
+    }: {
+      playerIds: string[];
+      isActive: boolean;
+    }) => {
+      const { data } = await api.patch("/players/bulk-status", {
+        playerIds,
+        isActive,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      setSelectedPlayerIds(new Set());
+    },
+  });
+
   const filteredPlayers = search
     ? data?.data.filter((p: Player) =>
         p.displayName.toLowerCase().includes(search.toLowerCase()),
@@ -61,10 +80,35 @@ export const PlayersPage = () => {
     : data?.data;
 
   const handleCreatePlayer = () => {
-    const name = window.prompt("Enter player name:");
-    if (name?.trim()) {
-      createPlayerMutation.mutate(name.trim());
+    setShowPlayerModal(true);
+  };
+
+  const submitPlayer = () => {
+    if (newPlayerName.trim()) {
+      createPlayerMutation.mutate(newPlayerName.trim());
     }
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked && filteredPlayers) {
+      setSelectedPlayerIds(new Set(filteredPlayers.map((p: Player) => p.id)));
+    } else {
+      setSelectedPlayerIds(new Set());
+    }
+  };
+
+  const handleSelectPlayer = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    id: string,
+  ) => {
+    e.stopPropagation();
+    const newSet = new Set(selectedPlayerIds);
+    if (e.target.checked) {
+      newSet.add(id);
+    } else {
+      newSet.delete(id);
+    }
+    setSelectedPlayerIds(newSet);
   };
 
   const formatCurrency = (cents: number) => {
@@ -88,11 +132,16 @@ export const PlayersPage = () => {
           style={{
             padding: "var(--spacing-md)",
             borderBottom: "1px solid var(--border-color)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "16px",
           }}
         >
           <div
             className="input-group"
-            style={{ position: "relative", maxWidth: "300px" }}
+            style={{ position: "relative", maxWidth: "300px", flex: 1 }}
           >
             <Search
               size={16}
@@ -113,7 +162,75 @@ export const PlayersPage = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              className={`btn ${filter === "active" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => {
+                setFilter("active");
+              }}
+            >
+              Active Only
+            </button>
+            <button
+              className={`btn ${filter === "all" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => {
+                setFilter("all");
+              }}
+            >
+              All Players
+            </button>
+          </div>
         </div>
+
+        {selectedPlayerIds.size > 0 && (
+          <div
+            style={{
+              padding: "16px",
+              backgroundColor: "rgba(59, 130, 246, 0.05)",
+              borderBottom: "1px solid var(--border-color)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "0.875rem",
+                fontWeight: 500,
+                color: "var(--primary)",
+              }}
+            >
+              {selectedPlayerIds.size} player(s) selected
+            </span>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                className="btn btn-primary"
+                onClick={() =>
+                  bulkStatusMutation.mutate({
+                    playerIds: Array.from(selectedPlayerIds),
+                    isActive: true,
+                  })
+                }
+                disabled={bulkStatusMutation.isPending}
+              >
+                Mark Active
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() =>
+                  bulkStatusMutation.mutate({
+                    playerIds: Array.from(selectedPlayerIds),
+                    isActive: false,
+                  })
+                }
+                disabled={bulkStatusMutation.isPending}
+              >
+                Mark Inactive
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={{ overflowX: "auto" }}>
           <table
@@ -130,6 +247,17 @@ export const PlayersPage = () => {
                   borderBottom: "1px solid var(--border-color)",
                 }}
               >
+                <th style={{ padding: "12px 16px", width: "48px" }}>
+                  <input
+                    type="checkbox"
+                    checked={
+                      (filteredPlayers?.length ?? 0) > 0 &&
+                      selectedPlayerIds.size === filteredPlayers?.length
+                    }
+                    onChange={handleSelectAll}
+                    style={{ cursor: "pointer" }}
+                  />
+                </th>
                 <th
                   style={{
                     padding: "12px 16px",
@@ -209,6 +337,17 @@ export const PlayersPage = () => {
                       (e.currentTarget.style.backgroundColor = "transparent")
                     }
                   >
+                    <td
+                      style={{ padding: "12px 16px" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedPlayerIds.has(player.id)}
+                        onChange={(e) => handleSelectPlayer(e, player.id)}
+                        style={{ cursor: "pointer" }}
+                      />
+                    </td>
                     <td style={{ padding: "12px 16px" }}>
                       <div
                         style={{
@@ -269,44 +408,68 @@ export const PlayersPage = () => {
             </tbody>
           </table>
         </div>
-
-        {!search && data && data.total > limit && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "16px",
-              borderTop: "1px solid var(--border-color)",
-            }}
-          >
-            <span
-              style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}
-            >
-              Showing {data.offset + 1} to{" "}
-              {Math.min(data.offset + limit, data.total)} of {data.total}
-            </span>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                className="btn btn-outline"
-                style={{ padding: "4px 8px" }}
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                className="btn btn-outline"
-                style={{ padding: "4px 8px" }}
-                disabled={(page + 1) * limit >= data.total}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      <Modal
+        isOpen={showPlayerModal}
+        title="Add New Player"
+        onClose={() => setShowPlayerModal(false)}
+        footer={
+          <>
+            <button
+              className="btn btn-outline"
+              onClick={() => setShowPlayerModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={!newPlayerName.trim() || createPlayerMutation.isPending}
+              onClick={() => {
+                submitPlayer();
+                setShowPlayerModal(false);
+                setNewPlayerName("");
+              }}
+            >
+              Add Player
+            </button>
+          </>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+              }}
+            >
+              Player Name
+            </label>
+            <input
+              type="text"
+              className="input-field"
+              value={newPlayerName}
+              onChange={(e) => setNewPlayerName(e.target.value)}
+              placeholder="e.g. John Doe"
+              autoFocus
+              onKeyDown={(e) => {
+                if (
+                  e.key === "Enter" &&
+                  newPlayerName.trim() &&
+                  !createPlayerMutation.isPending
+                ) {
+                  submitPlayer();
+                  setShowPlayerModal(false);
+                  setNewPlayerName("");
+                }
+              }}
+            />
+          </div>
+        </div>
+      </Modal>
     </>
   );
 };

@@ -6,6 +6,7 @@ import { query, withTransaction } from "../db/helpers.js";
 import { parseBody, parseUuidParam } from "../utils/request.js";
 import { toIso } from "../utils/mappers.js";
 import { insertLedgerEntry } from "../services/ledger.js";
+import { rescanAllPendingTransactions } from "../services/bank-import.js";
 
 export async function reconciliationRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
@@ -14,7 +15,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
     const limit = Number((request.query as any).limit) || 50;
     const offset = Number((request.query as any).offset) || 0;
 
-    const countResult = await query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM reconciliation_queue`);
+    const countResult = await query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM reconciliation_queue WHERE status = 'open'`);
     const total = Number(countResult.rows[0]?.count || 0);
 
     const result = await query<{
@@ -29,31 +30,69 @@ export async function reconciliationRoutes(app: FastifyInstance) {
       resolved_by: string | null;
       created_at: Date | string;
       resolved_at: Date | string | null;
+      bt_description: string | null;
+      bt_external_id: string | null;
+      bt_source_ref: string | null;
+      bt_amount: number | null;
     }>(
-      `SELECT id, item_type, source_record_id, payload, suggested_player_id, confidence, reason, status, resolved_by, created_at, resolved_at
-       FROM reconciliation_queue
-       ORDER BY status ASC, confidence DESC, id ASC
+      `SELECT
+         rq.id, rq.item_type, rq.source_record_id, rq.payload, rq.suggested_player_id,
+         rq.confidence, rq.reason, rq.status, rq.resolved_by, rq.created_at, rq.resolved_at,
+         bt.description_raw as bt_description,
+         bt.external_txn_id as bt_external_id,
+         bt.source_ref as bt_source_ref,
+         bt.amount_cents as bt_amount
+       FROM reconciliation_queue rq
+       LEFT JOIN bank_transactions bt ON rq.item_type = 'bank_transaction' AND rq.source_record_id = bt.id
+       WHERE rq.status = 'open'
+       ORDER BY rq.confidence DESC, rq.id ASC
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
     return {
-      data: result.rows.map((row) => ({
-        id: row.id,
-        itemType: row.item_type,
-        sourceRecordId: row.source_record_id,
-        payload: row.payload,
-        suggestedPlayerId: row.suggested_player_id,
-        confidence: Number(row.confidence),
-        reason: row.reason,
-        status: row.status,
-        resolvedBy: row.resolved_by,
-        createdAt: toIso(row.created_at),
-        resolvedAt: toIso(row.resolved_at)
-      })),
+      data: result.rows.map((row) => {
+        let enhancedPayload = row.payload || {};
+        
+        // Inject bank transaction details into payload for the frontend
+        if (row.item_type === 'bank_transaction') {
+          enhancedPayload = {
+            ...enhancedPayload,
+            descriptionRaw: row.bt_description,
+            externalTxnId: row.bt_external_id,
+            sourceRef: row.bt_source_ref,
+            amountCents: row.bt_amount ? Number(row.bt_amount) : 0,
+          };
+        }
+
+        return {
+          id: row.id,
+          itemType: row.item_type,
+          sourceRecordId: row.source_record_id,
+          payload: enhancedPayload,
+          suggestedPlayerId: row.suggested_player_id,
+          confidence: Number(row.confidence),
+          reason: row.reason,
+          status: row.status,
+          resolvedBy: row.resolved_by,
+          createdAt: toIso(row.created_at),
+          resolvedAt: toIso(row.resolved_at)
+        };
+      }),
       total,
       limit,
       offset
     };
+  });
+
+  app.post("/api/reconciliation-queue/rescan", async (request, reply) => {
+    const result = await withTransaction(async (client) => {
+      const mappedCount = await rescanAllPendingTransactions(client);
+      return { mappedCount };
+    });
+
+    return reply.status(200).send({
+      transactionsMapped: result.mappedCount
+    });
   });
 
   app.post("/api/reconciliation-queue/:id/resolve", async (request, reply) => {
@@ -76,10 +115,10 @@ export async function reconciliationRoutes(app: FastifyInstance) {
         [queueId]
       );
       if (queueItem.rowCount === 0) {
-        throw reply.notFound("Queue item not found");
+        throw app.httpErrors.notFound("Queue item not found");
       }
       if (queueItem.rows[0]!.status !== "open") {
-        throw reply.conflict("Queue item is already resolved or dismissed");
+        throw app.httpErrors.conflict("Queue item is already resolved or dismissed");
       }
 
       const item = queueItem.rows[0]!;
@@ -99,7 +138,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
         if (chargeable) {
           const game = await client.query<{ fee_cents: number }>(`SELECT fee_cents FROM games WHERE id = $1`, [item.source_record_id]);
           if (game.rowCount === 0) {
-            throw reply.notFound("Game not found for queue item");
+            throw app.httpErrors.notFound("Game not found for queue item");
           }
           await insertLedgerEntry(client, {
             playerId: body.playerId,
@@ -115,7 +154,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
           [item.source_record_id]
         );
         if (transaction.rowCount === 0) {
-          throw reply.notFound("Bank transaction not found for queue item");
+          throw app.httpErrors.notFound("Bank transaction not found for queue item");
         }
 
         await insertLedgerEntry(client, {
