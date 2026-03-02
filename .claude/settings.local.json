@@ -4,7 +4,10 @@
       "Bash(npm install framer-motion -w @fiveaside/web)",
       "Bash(npm run typecheck)",
       "Bash(npm run build -w @fiveaside/contracts)",
-      "Bash(npm install)"
+      "Bash(npm install)",
+      "Bash(npm run build)",
+      "Bash(git add -A)",
+      "Bash(git commit:*)"
     ]
   }
 }
