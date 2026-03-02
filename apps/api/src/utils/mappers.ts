@@ -11,6 +11,7 @@ export type PlayerRow = {
 export type GameRow = {
   id: string;
   external_event_id: string | null;
+  facebook_event_url: string | null;
   game_date: Date | string;
   kickoff_at_utc: Date | string | null;
   fee_cents: number;
@@ -49,6 +50,7 @@ export function mapGame(row: GameRow) {
   return {
     id: row.id,
     externalEventId: row.external_event_id,
+    facebookEventUrl: row.facebook_event_url,
     gameDate: toDateString(row.game_date),
     kickoffAtUtc: toIso(row.kickoff_at_utc),
     feeCents: row.fee_cents,

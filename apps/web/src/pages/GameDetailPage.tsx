@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { Upload, Edit2, Lock, Save } from "lucide-react";
+import { Upload, Edit2, Lock, Save, ExternalLink, XCircle } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { CurrencyDisplay } from "../components/CurrencyDisplay";
@@ -24,15 +24,20 @@ type GameDetails = {
   status: string;
   source: string;
   feeCents: number;
+  facebookEventUrl?: string | null;
   attendance: AttendanceRecord[];
 };
 
 const statusVariant = (status: string) => {
   switch (status) {
-    case "completed":
+    case "synced":
       return "success" as const;
     case "scheduled":
       return "info" as const;
+    case "pending":
+      return "warning" as const;
+    case "cancelled":
+      return "danger" as const;
     default:
       return "neutral" as const;
   }
@@ -104,6 +109,7 @@ export const GameDetailPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["games", id] });
+      queryClient.invalidateQueries({ queryKey: ["games"] });
       setIsEditingFee(false);
     },
   });
@@ -115,6 +121,7 @@ export const GameDetailPage = () => {
     onSuccess: () => {
       setImportText("");
       queryClient.invalidateQueries({ queryKey: ["games", id] });
+      queryClient.invalidateQueries({ queryKey: ["games"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
       addToast(
@@ -152,6 +159,8 @@ export const GameDetailPage = () => {
     );
 
   const formattedDate = formatDate(game.gameDate);
+  const isFeeLocked = game.status === "synced" || game.status === "cancelled";
+  const canCancel = game.status !== "cancelled" && game.status !== "synced";
 
   return (
     <>
@@ -172,6 +181,21 @@ export const GameDetailPage = () => {
           </div>
         }
       />
+
+      {game.facebookEventUrl && (
+        <div className="mt-sm mb-md">
+          <a
+            href={game.facebookEventUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-link"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "var(--font-sm)" }}
+          >
+            <ExternalLink size={14} />
+            Facebook Event
+          </a>
+        </div>
+      )}
 
       <div className="grid-2 mt-md">
         {/* Match Fee Card */}
@@ -204,8 +228,8 @@ export const GameDetailPage = () => {
           ) : (
             <div className="flex-between">
               <CurrencyDisplay cents={game.feeCents} size="lg" colorCode={false} />
-              {game.status === "completed" ? (
-                <span className="text-muted" title="Fee locked after finalization">
+              {isFeeLocked ? (
+                <span className="text-muted" title="Fee locked after sync">
                   <Lock size={16} />
                 </span>
               ) : (
@@ -222,13 +246,13 @@ export const GameDetailPage = () => {
             </div>
           )}
 
-          {game.status !== "completed" && (
+          {canCancel && (
             <button
-              className="btn btn-success mt-md"
-              onClick={() => updateGameMutation.mutate({ status: "completed" })}
+              className="btn btn-danger mt-md"
+              onClick={() => updateGameMutation.mutate({ status: "cancelled" })}
               disabled={updateGameMutation.isPending}
             >
-              Finalize Game
+              <XCircle size={16} /> Cancel Game
             </button>
           )}
         </div>

@@ -1657,3 +1657,38 @@ input[type="checkbox"] {
 .mt-xl { margin-top: var(--spacing-xl); }
 .mb-md { margin-bottom: var(--spacing-md); }
 .mb-lg { margin-bottom: var(--spacing-lg); }
+
+/* Batch preview table */
+.batch-preview-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.batch-preview-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.batch-preview-table td {
+  padding: 0.5rem 0.75rem;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.batch-preview-url {
+  max-width: 300px;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  font-size: var(--font-xs);
+}

@@ -3,6 +3,12 @@ import { z } from "zod";
 export const SourceSchema = z.enum(["facebook", "bank", "manual", "system"]);
 export type Source = z.infer<typeof SourceSchema>;
 
+export const GameStatusSchema = z.enum(["scheduled", "pending", "synced", "cancelled"]);
+export type GameStatus = z.infer<typeof GameStatusSchema>;
+
+export const BatchFrequencySchema = z.enum(["weekly", "fortnightly", "monthly"]);
+export type BatchFrequency = z.infer<typeof BatchFrequencySchema>;
+
 export const RoleSchema = z.enum(["owner", "admin"]);
 export type Role = z.infer<typeof RoleSchema>;
 
@@ -40,11 +46,12 @@ export type PlayerAliasCreateInput = z.infer<typeof PlayerAliasCreateSchema>;
 export const GameSchema = z.object({
   id: z.string().uuid(),
   externalEventId: z.string().nullable(),
+  facebookEventUrl: z.string().nullable(),
   gameDate: z.string(),
   kickoffAtUtc: z.string().datetime().nullable(),
   feeCents: z.number().int().positive(),
   source: SourceSchema,
-  status: z.string(),
+  status: GameStatusSchema,
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 });
@@ -52,17 +59,26 @@ export type Game = z.infer<typeof GameSchema>;
 
 export const GameCreateSchema = z.object({
   externalEventId: z.string().optional(),
+  facebookEventUrl: z.string().url().optional(),
   gameDate: z.string(),
   kickoffAtUtc: z.string().datetime().optional(),
   source: SourceSchema.default("manual"),
-  status: z.string().default("scheduled")
+  status: GameStatusSchema.default("scheduled")
 });
 export type GameCreateInput = z.infer<typeof GameCreateSchema>;
 
 export const GameUpdateSchema = z.object({
-  feeCents: z.number().int().positive()
+  feeCents: z.number().int().positive().optional(),
+  status: GameStatusSchema.optional()
 });
 export type GameUpdateInput = z.infer<typeof GameUpdateSchema>;
+
+export const GameBatchCreateSchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  frequency: BatchFrequencySchema,
+  facebookEventUrls: z.array(z.string().url()).min(1).max(52)
+});
+export type GameBatchCreateInput = z.infer<typeof GameBatchCreateSchema>;
 
 export const AttendanceImportRowSchema = z.object({
   playerName: z.string().min(1),
