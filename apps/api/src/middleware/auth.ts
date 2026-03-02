@@ -14,7 +14,7 @@ export const authPlugin = fp(async (app) => {
 
   app.decorate("requireAuth", async (request: FastifyRequest, reply: FastifyReply) => {
     if (env.DISABLE_AUTH === "true") {
-      request.admin = { id: "dev-admin", email: "dev@localhost", role: "admin" } as any;
+      request.admin = { id: null, email: "dev@localhost", role: "admin" } as any;
       return;
     }
 
