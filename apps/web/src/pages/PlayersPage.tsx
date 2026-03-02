@@ -9,7 +9,7 @@ import { DataTable, type Column } from "../components/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
 import { CurrencyDisplay } from "../components/CurrencyDisplay";
 import { useToast } from "../contexts/ToastContext";
-import { formatDate, getInitials, getAvatarColor } from "../utils/format";
+import { formatDate } from "../utils/format";
 
 type Player = {
   id: string;
