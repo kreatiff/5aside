@@ -21,7 +21,10 @@ import { reconciliationRoutes } from "./routes/reconciliation.js";
 import { ledgerRoutes } from "./routes/ledger.js";
 
 export async function buildServer() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: true,
+    trustProxy: true
+  });
 
   await app.register(sensible);
   await app.register(cookie);
@@ -33,7 +36,7 @@ export async function buildServer() {
   app.get("/health", async () => ({ ok: true }));
 
   await app.register(authPlugin);
-  
+
   await app.register(authRoutes);
   await app.register(dashboardRoutes);
   await app.register(adminRoutes);
