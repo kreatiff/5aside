@@ -634,6 +634,16 @@ input[type="checkbox"] {
   margin-top: 1px;
 }
 
+.admin-version {
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+  opacity: 0.7;
+}
+
 .sidebar.collapsed .admin-details {
   opacity: 0;
   pointer-events: none;
