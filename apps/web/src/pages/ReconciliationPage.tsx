@@ -58,6 +58,7 @@ export const ReconciliationPage = () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["players"] });
       queryClient.invalidateQueries({ queryKey: ["games"] });
+      addToast("success", "Item resolved and ledger updated.");
     },
   });
 
@@ -172,6 +173,7 @@ export const ReconciliationPage = () => {
                   <div
                     className={`confidence-bar__fill ${isHighConfidence ? "confidence-bar__fill--high" : "confidence-bar__fill--low"}`}
                     role="progressbar"
+                    style={{ width: `${confidencePct}%` }}
                     aria-valuenow={confidencePct}
                     aria-valuemin={0}
                     aria-valuemax={100}

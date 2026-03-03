@@ -52,7 +52,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
     return {
       data: result.rows.map((row) => {
         let enhancedPayload = row.payload || {};
-        
+
         // Inject bank transaction details into payload for the frontend
         if (row.item_type === 'bank_transaction') {
           enhancedPayload = {
@@ -179,5 +179,25 @@ export async function reconciliationRoutes(app: FastifyInstance) {
     });
 
     return result;
+  });
+
+  app.post("/api/reconciliation-queue/:id/dismiss", async (request, reply) => {
+    const queueId = parseUuidParam(request, reply, "id");
+    const adminId = request.admin.id;
+
+    const result = await query(
+      `UPDATE reconciliation_queue
+       SET status = 'dismissed',
+           resolved_by = $1,
+           resolved_at = NOW()
+       WHERE id = $2 AND status = 'open'`,
+      [adminId, queueId]
+    );
+
+    if (result.rowCount === 0) {
+      throw app.httpErrors.notFound("Queue item not found or already resolved");
+    }
+
+    return { dismissed: true };
   });
 }

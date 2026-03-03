@@ -20,7 +20,8 @@ export const authPlugin = fp(async (app) => {
 
     try {
       await request.jwtVerify();
-      request.admin = request.user as any;
+      const user = request.user as any;
+      request.admin = { id: user.sub, email: user.email, role: user.role };
     } catch (err) {
       reply.unauthorized("Authentication required");
     }
