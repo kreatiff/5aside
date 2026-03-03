@@ -14,6 +14,13 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(rootPkg.version),
   },
+  resolve: {
+    alias: {
+      // Resolve workspace packages from source so Vite doesn't need a pre-built dist/
+      '@fiveaside/contracts': resolve(__dirname, '../../packages/contracts/src/index.ts'),
+      '@fiveaside/recon': resolve(__dirname, '../../packages/recon/src/index.ts'),
+    },
+  },
   server: {
     proxy: {
       '/api': {
