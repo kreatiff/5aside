@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { GameCreateSchema, GameUpdateSchema, GameBatchCreateSchema, GameBatchUpdateSchema, AttendanceImportSchema } from "@fiveaside/contracts";
+import { GameCreateSchema, GameUpdateSchema, GameBatchCreateSchema, GameBatchUpdateSchema, AttendanceImportSchema, AttendanceManualAddSchema } from "@fiveaside/contracts";
 import { matchPlayerByAlias, isChargeableStatus, MatchCandidate } from "@fiveaside/recon";
 import { query, withTransaction } from "../db/helpers.js";
 import { mapGame, type GameRow } from "../utils/mappers.js";
@@ -342,5 +342,96 @@ export async function gameRoutes(app: FastifyInstance) {
 
     reply.code(201);
     return summary;
+  });
+
+  // ── Manual attendance: add a player ──────────────────────────────────────
+  app.post("/api/games/:id/attendance", async (request, reply) => {
+    const gameId = parseUuidParam(request, reply, "id");
+    const body = parseBody(reply, AttendanceManualAddSchema, request.body);
+
+    const result = await withTransaction(async (client) => {
+      const gameResult = await client.query<{ fee_cents: number; status: string }>(
+        `SELECT fee_cents, status FROM games WHERE id = $1`,
+        [gameId]
+      );
+      if (gameResult.rowCount === 0) {
+        throw app.httpErrors.notFound("Game not found");
+      }
+
+      const feeCents = gameResult.rows[0]!.fee_cents;
+
+      // Guard: duplicate player in game
+      const existing = await client.query<{ id: string }>(
+        `SELECT id FROM attendance WHERE game_id = $1 AND player_id = $2`,
+        [gameId, body.playerId]
+      );
+      if ((existing.rowCount ?? 0) > 0) {
+        throw app.httpErrors.conflict("Player is already in this game");
+      }
+
+      const attendance = await client.query<{ id: string }>(
+        `INSERT INTO attendance (game_id, player_id, source_status, chargeable, source_ref)
+         VALUES ($1, $2, 'manual', $3, NULL)
+         RETURNING id`,
+        [gameId, body.playerId, body.chargeable]
+      );
+      const attendanceId = attendance.rows[0]!.id;
+
+      if (body.chargeable) {
+        await insertLedgerEntry(client, {
+          playerId: body.playerId,
+          type: "charge",
+          amountCents: feeCents,
+          gameId,
+          attendanceId
+        });
+      }
+
+      return { attendanceId };
+    });
+
+    reply.code(201);
+    return result;
+  });
+
+  // ── Manual attendance: remove a player ───────────────────────────────────
+  app.delete("/api/games/:id/attendance/:attendanceId", async (request, reply) => {
+    const gameId = parseUuidParam(request, reply, "id");
+    const attendanceId = parseUuidParam(request, reply, "attendanceId");
+
+    await withTransaction(async (client) => {
+      // Fetch the attendance record
+      const attResult = await client.query<{ player_id: string; chargeable: boolean }>(
+        `SELECT player_id, chargeable FROM attendance WHERE id = $1 AND game_id = $2`,
+        [attendanceId, gameId]
+      );
+      if (attResult.rowCount === 0) {
+        throw app.httpErrors.notFound("Attendance record not found");
+      }
+      const { player_id: playerId, chargeable } = attResult.rows[0]!;
+
+      // If the attendance was chargeable, reverse any associated charge ledger entries
+      if (chargeable) {
+        const chargeResult = await client.query<{ id: string; amount_cents: number }>(
+          `SELECT id, amount_cents FROM ledger_entries
+           WHERE attendance_id = $1 AND type = 'charge'`,
+          [attendanceId]
+        );
+        for (const entry of chargeResult.rows) {
+          // Reverse the charge on the player balance
+          await client.query(
+            `UPDATE players SET current_balance_cents = current_balance_cents - $1, updated_at = NOW() WHERE id = $2`,
+            [entry.amount_cents, playerId]
+          );
+          // Delete the ledger entry
+          await client.query(`DELETE FROM ledger_entries WHERE id = $1`, [entry.id]);
+        }
+      }
+
+      // Delete the attendance record
+      await client.query(`DELETE FROM attendance WHERE id = $1`, [attendanceId]);
+    });
+
+    return { removed: true };
   });
 }

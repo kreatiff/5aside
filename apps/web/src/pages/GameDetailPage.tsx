@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { Upload, Edit2, Lock, Save, ExternalLink, XCircle } from "lucide-react";
+import { Upload, Edit2, Lock, Save, ExternalLink, XCircle, UserPlus, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { CurrencyDisplay } from "../components/CurrencyDisplay";
@@ -26,6 +26,11 @@ type GameDetails = {
   feeCents: number;
   facebookEventUrl?: string | null;
   attendance: AttendanceRecord[];
+};
+
+type Player = {
+  id: string;
+  displayName: string;
 };
 
 const statusVariant = (status: string) => {
@@ -54,39 +59,6 @@ const sourceVariant = (source: string) => {
   }
 };
 
-const attendanceColumns: Column<AttendanceRecord>[] = [
-  {
-    key: "player",
-    header: "Player",
-    sortable: true,
-    sortValue: (att) => att.displayName,
-    render: (att) => (
-      <Link to={`/players/${att.playerId}`} className="text-link">
-        {att.displayName}
-      </Link>
-    ),
-  },
-  {
-    key: "response",
-    header: "Response",
-    sortable: true,
-    sortValue: (att) => att.sourceStatus,
-    render: (att) => (
-      <span className="text-capitalize">{att.sourceStatus}</span>
-    ),
-  },
-  {
-    key: "chargeable",
-    header: "Chargeable",
-    align: "center",
-    render: (att) => (
-      <StatusBadge variant={att.chargeable ? "warning" : "neutral"} dot>
-        {att.chargeable ? "Yes" : "No"}
-      </StatusBadge>
-    ),
-  },
-];
-
 export const GameDetailPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
@@ -94,12 +66,23 @@ export const GameDetailPage = () => {
   const [isEditingFee, setIsEditingFee] = useState(false);
   const [feeInput, setFeeInput] = useState("");
   const [importText, setImportText] = useState("");
+  const [showAddPlayer, setShowAddPlayer] = useState(false);
+  const [addPlayerId, setAddPlayerId] = useState("");
+  const [addChargeable, setAddChargeable] = useState(true);
 
   const { data: game, isLoading } = useQuery({
     queryKey: ["games", id],
     queryFn: async () => {
       const { data } = await api.get<{ game: GameDetails }>(`/games/${id}`);
       return data.game;
+    },
+  });
+
+  const { data: players } = useQuery({
+    queryKey: ["players", "all-for-game"],
+    queryFn: async () => {
+      const { data } = await api.get(`/players?limit=1000`);
+      return data.data as Player[];
     },
   });
 
@@ -131,6 +114,43 @@ export const GameDetailPage = () => {
     },
   });
 
+  const addPlayerMutation = useMutation({
+    mutationFn: async () => {
+      await api.post(`/games/${id}/attendance`, {
+        playerId: addPlayerId,
+        chargeable: addChargeable,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["games", id] });
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      setAddPlayerId("");
+      setAddChargeable(true);
+      setShowAddPlayer(false);
+      addToast("success", "Player added to game.");
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message ?? "Failed to add player.";
+      addToast("error", msg);
+    },
+  });
+
+  const removePlayerMutation = useMutation({
+    mutationFn: async (attendanceId: string) => {
+      await api.delete(`/games/${id}/attendance/${attendanceId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["games", id] });
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      addToast("success", "Player removed from game.");
+    },
+    onError: () => {
+      addToast("error", "Failed to remove player.");
+    },
+  });
+
   const handleSaveFee = () => {
     const newFee = Number(feeInput);
     if (!isNaN(newFee)) {
@@ -144,6 +164,69 @@ export const GameDetailPage = () => {
       importAttendanceMutation.mutate(importText);
     }
   };
+
+  const handleAddPlayer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addPlayerId) return;
+    addPlayerMutation.mutate();
+  };
+
+  // Players not already in the game
+  const availablePlayers = useMemo(() => {
+    const attendingIds = new Set(game?.attendance?.map((a) => a.playerId) ?? []);
+    return (players ?? []).filter((p) => !attendingIds.has(p.id));
+  }, [players, game?.attendance]);
+
+  const attendanceColumns: Column<AttendanceRecord>[] = useMemo(
+    () => [
+      {
+        key: "player",
+        header: "Player",
+        sortable: true,
+        sortValue: (att) => att.displayName,
+        render: (att) => (
+          <Link to={`/players/${att.playerId}`} className="text-link">
+            {att.displayName}
+          </Link>
+        ),
+      },
+      {
+        key: "response",
+        header: "Response",
+        sortable: true,
+        sortValue: (att) => att.sourceStatus,
+        render: (att) => (
+          <span className="text-capitalize">{att.sourceStatus}</span>
+        ),
+      },
+      {
+        key: "chargeable",
+        header: "Chargeable",
+        align: "center",
+        render: (att) => (
+          <StatusBadge variant={att.chargeable ? "warning" : "neutral"} dot>
+            {att.chargeable ? "Yes" : "No"}
+          </StatusBadge>
+        ),
+      },
+      {
+        key: "remove",
+        header: "",
+        align: "right",
+        render: (att) => (
+          <button
+            className="btn btn-ghost btn-icon btn-danger"
+            title="Remove player from game"
+            onClick={() => removePlayerMutation.mutate(att.id)}
+            disabled={removePlayerMutation.isPending}
+          >
+            <X size={14} />
+          </button>
+        ),
+      },
+    ],
+    [removePlayerMutation]
+  );
 
   if (isLoading)
     return (
@@ -301,7 +384,54 @@ export const GameDetailPage = () => {
           <h3 className="card-header__title">
             Attendance List ({game.attendance?.length || 0})
           </h3>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => {
+              setShowAddPlayer((v) => !v);
+              setAddPlayerId("");
+              setAddChargeable(true);
+            }}
+          >
+            <UserPlus size={16} />
+            {showAddPlayer ? "Cancel" : "Add Player"}
+          </button>
         </div>
+
+        {showAddPlayer && (
+          <form onSubmit={handleAddPlayer} className="attendance-add-form">
+            <select
+              className="input-field"
+              value={addPlayerId}
+              onChange={(e) => setAddPlayerId(e.target.value)}
+              required
+            >
+              <option value="" disabled>Select player…</option>
+              {availablePlayers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.displayName}
+                </option>
+              ))}
+            </select>
+
+            <label className="attendance-add-form__charge-toggle">
+              <input
+                type="checkbox"
+                checked={addChargeable}
+                onChange={(e) => setAddChargeable(e.target.checked)}
+              />
+              <span>Charge game fee</span>
+            </label>
+
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm"
+              disabled={!addPlayerId || addPlayerMutation.isPending}
+            >
+              {addPlayerMutation.isPending ? "Adding…" : "Add"}
+            </button>
+          </form>
+        )}
+
         <DataTable<AttendanceRecord>
           columns={attendanceColumns}
           data={game.attendance ?? []}

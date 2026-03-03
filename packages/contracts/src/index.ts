@@ -126,6 +126,12 @@ export const ReconcileResolveSchema = z.object({
 });
 export type ReconcileResolveInput = z.infer<typeof ReconcileResolveSchema>;
 
+export const AttendanceManualAddSchema = z.object({
+  playerId: z.string().uuid(),
+  chargeable: z.boolean()
+});
+export type AttendanceManualAddInput = z.infer<typeof AttendanceManualAddSchema>;
+
 export const FeeUpdateSchema = z.object({
   newFeeCents: z.number().int().positive()
 });
