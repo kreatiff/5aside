@@ -68,6 +68,7 @@ export const ReconciliationPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+      addToast("success", "Item dismissed.");
     },
   });
 
