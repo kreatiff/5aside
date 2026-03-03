@@ -21,10 +21,21 @@ export const up = (pgm) => {
   `);
 
     // Step 2: Add the unique constraint to prevent future duplicates.
-    // IF NOT EXISTS makes this idempotent in case the constraint was already applied.
+    // Uses a DO block to check pg_constraint first — ADD CONSTRAINT IF NOT EXISTS
+    // is not valid Postgres syntax (only CREATE INDEX supports IF NOT EXISTS).
     pgm.sql(`
-    ALTER TABLE attendance
-    ADD CONSTRAINT IF NOT EXISTS uq_attendance_game_player UNIQUE (game_id, player_id);
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'uq_attendance_game_player'
+          AND conrelid = 'attendance'::regclass
+      ) THEN
+        ALTER TABLE attendance
+          ADD CONSTRAINT uq_attendance_game_player UNIQUE (game_id, player_id);
+      END IF;
+    END;
+    $$;
   `);
 };
 
