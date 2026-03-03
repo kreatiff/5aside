@@ -1,9 +1,10 @@
 services:
-  futsal-data:
+  app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: futsal-data
+    image: 5aside-app:latest
+    container_name: 5aside
     restart: unless-stopped
     ports:
       - "${APP_PORT:-4000}:4000"
