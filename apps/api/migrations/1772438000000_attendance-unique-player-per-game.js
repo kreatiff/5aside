@@ -21,9 +21,10 @@ export const up = (pgm) => {
   `);
 
     // Step 2: Add the unique constraint to prevent future duplicates.
+    // IF NOT EXISTS makes this idempotent in case the constraint was already applied.
     pgm.sql(`
     ALTER TABLE attendance
-    ADD CONSTRAINT uq_attendance_game_player UNIQUE (game_id, player_id);
+    ADD CONSTRAINT IF NOT EXISTS uq_attendance_game_player UNIQUE (game_id, player_id);
   `);
 };
 
