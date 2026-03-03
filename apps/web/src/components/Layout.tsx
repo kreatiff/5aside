@@ -93,6 +93,7 @@ export const Layout = ({ children }: { children: ReactNode }) => {
             <div className="admin-details">
               <span className="admin-email">{admin?.email}</span>
               <span className="admin-role">{admin?.role}</span>
+              <span className="admin-version">v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'}</span>
             </div>
           </div>
           <button className="nav-item logout-btn" onClick={logout}>

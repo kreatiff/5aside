@@ -306,9 +306,14 @@ export async function gameRoutes(app: FastifyInstance) {
         const attendance = await client.query<{ id: string }>(
           `INSERT INTO attendance (game_id, player_id, source_status, chargeable, source_ref)
            VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (game_id, player_id) DO NOTHING
            RETURNING id`,
           [gameId, match.playerId, row.sourceStatus, chargeable, row.sourceRef ?? null]
         );
+
+        // If no row was returned the player was already recorded for this game — skip.
+        if (attendance.rowCount === 0) continue;
+
         imported += 1;
 
         if (chargeable) {

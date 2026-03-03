@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS attendance (
   chargeable BOOLEAN NOT NULL,
   source_ref TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_attendance_game_player UNIQUE (game_id, player_id)
 );
 
 CREATE TABLE IF NOT EXISTS bank_transactions (
