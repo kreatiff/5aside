@@ -37,7 +37,7 @@ export function getInitials(name: string): string {
 }
 
 const AVATAR_COLORS = [
-  "linear-gradient(135deg, #3b82f6, #2563eb)",
+  "linear-gradient(135deg, #14b8a6, #0d9488)",
   "linear-gradient(135deg, #8b5cf6, #7c3aed)",
   "linear-gradient(135deg, #06b6d4, #0891b2)",
   "linear-gradient(135deg, #f59e0b, #d97706)",
