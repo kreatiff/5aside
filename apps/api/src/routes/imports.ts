@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { CsvBankUploadSchema, BankImportSchema, WebhookBankSchema, WebhookAttendanceSchema } from "@fiveaside/contracts";
+import { CsvBankUploadSchema, BankImportSchema, WebhookBankSchema, WebhookAttendanceSchema, WebhookPocketsmithSchema } from "@fiveaside/contracts";
 import { parseCsvLines, matchPlayerByAlias, isChargeableStatus, MatchCandidate } from "@fiveaside/recon";
 import { parseBody, assertWebhookSecret } from "../utils/request.js";
 import { withTransaction, query } from "../db/helpers.js";
@@ -192,6 +192,58 @@ export async function importRoutes(app: FastifyInstance) {
       }
 
       return { imported, charged, queued };
+    });
+
+    reply.code(201);
+    return result;
+  });
+
+  app.post("/api/webhooks/bank-pocketsmith", async (request, reply) => {
+    assertWebhookSecret(request, reply);
+    const body = parseBody(reply, WebhookPocketsmithSchema, request.body);
+
+    // Flatten all transactions from all response objects
+    const transactions = body.flatMap((item) => item.response.transactions);
+
+    // Transform Pocketsmith format → internal ProcessBankRowInput format
+    const mappedRows = transactions.map((tx) => ({
+      externalTxnId: `ps_${tx.id}`,
+      postedAtUtc: new Date(tx.date).toISOString(),
+      amountCents: Math.round(tx.amount * 100),
+      descriptionRaw: tx.description,
+      tagNames: tx.tagNames,
+    }));
+
+    const parsed = parseBody(reply, BankImportSchema, { rows: mappedRows, mode: "webhook" });
+
+    const result = await withTransaction(async (client) => {
+      const importRow = await client.query<{ id: string }>(
+        `INSERT INTO imports (source_type, mode, checksum, record_count, status)
+         VALUES ('bank', 'pocketsmith', NULL, $1, 'processing')
+         RETURNING id`,
+        [parsed.rows.length]
+      );
+      const importId = importRow.rows[0]!.id;
+
+      const aliases = await client.query<{ player_id: string; alias_raw: string }>(
+        `SELECT player_id, alias_raw FROM player_aliases`
+      );
+      const players = await client.query<{ id: string; display_name: string }>(
+        `SELECT id, display_name FROM players`
+      );
+      const candidates: MatchCandidate[] = [];
+      for (const p of players.rows) {
+        if (p.display_name) candidates.push({ playerId: p.id, aliasRaw: p.display_name });
+      }
+      for (const row of aliases.rows) {
+        if (row.alias_raw) candidates.push({ playerId: row.player_id, aliasRaw: row.alias_raw });
+      }
+
+      // Pass the original mapped rows (with tagNames) instead of parsed rows
+      const { posted, queued } = await processBankRows(client, mappedRows, candidates);
+
+      await client.query(`UPDATE imports SET status = 'completed', completed_at = NOW() WHERE id = $1`, [importId]);
+      return { importId, posted, queued };
     });
 
     reply.code(201);

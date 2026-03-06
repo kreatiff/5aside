@@ -8,6 +8,7 @@ type ProcessBankRowInput = {
   amountCents: number;
   descriptionRaw: string;
   sourceRef?: string;
+  tagNames?: string[];
 };
 
 export async function processBankRows(client: PoolClient, rows: ProcessBankRowInput[], candidates: MatchCandidate[]) {
@@ -28,7 +29,25 @@ export async function processBankRows(client: PoolClient, rows: ProcessBankRowIn
 
     posted += 1;
     const bankTransactionId = inserted.rows[0]!.id;
-    const match = matchPlayerByAlias(row.descriptionRaw, candidates);
+
+    // Tag-first matching: try each tag before falling back to description
+    let match = { matched: false, playerId: null as string | null, confidence: 0, reason: "no_match" } as ReturnType<typeof matchPlayerByAlias>;
+    if (row.tagNames && row.tagNames.length > 0) {
+      for (const tag of row.tagNames) {
+        if (!tag || tag.trim().length === 0) continue;
+        const tagMatch = matchPlayerByAlias(tag, candidates);
+        if (tagMatch.matched) {
+          match = tagMatch;
+          break;
+        }
+      }
+    }
+
+    // Fall back to description matching if no tag matched
+    if (!match.matched) {
+      match = matchPlayerByAlias(row.descriptionRaw, candidates);
+    }
+
     if (!match.matched) {
       await client.query(
         `INSERT INTO reconciliation_queue (item_type, source_record_id, payload, suggested_player_id, confidence, reason)

@@ -24,15 +24,15 @@ apps/api/migrations/ node-pg-migrate migration files (JS)
 
 ## Tech Stack
 
-| Layer      | Choice |
-|------------|--------|
-| Backend    | Fastify 5, TypeScript 5.8, Node >=20 |
-| Database   | PostgreSQL, node-pg-migrate, raw parameterized SQL (no ORM) |
+| Layer      | Choice                                                                |
+| ---------- | --------------------------------------------------------------------- |
+| Backend    | Fastify 5, TypeScript 5.8, Node >=20                                  |
+| Database   | PostgreSQL, node-pg-migrate, raw parameterized SQL (no ORM)           |
 | Auth       | JWT (`@fastify/jwt`), HttpOnly refresh cookies, TOTP (otplib), Argon2 |
-| Validation | Zod — shared via `@fiveaside/contracts` |
-| Frontend   | React 19, Vite 7, React Router 7, TanStack Query 5, Axios |
-| Testing    | Vitest |
-| Deploy     | Docker Compose (API container serves web build on :4000) |
+| Validation | Zod — shared via `@fiveaside/contracts`                               |
+| Frontend   | React 19, Vite 7, React Router 7, TanStack Query 5, Axios             |
+| Testing    | Vitest                                                                |
+| Deploy     | Docker Compose (API container serves web build on :4000)              |
 
 ---
 
@@ -56,6 +56,7 @@ npm run db:create-admin
 ## Critical Domain Rules
 
 ### Fee Snapshot (immutable — NEVER backfill)
+
 - `settings.current_game_fee_cents` is a global default used **only at game creation**.
 - Each game stores its own `games.fee_cents` snapshot at creation/import time.
 - Changing the global fee **never** updates existing games.
@@ -63,15 +64,18 @@ npm run db:create-admin
 - `games.fee_cents` is **locked** (API rejects edits) once any charge ledger entry exists for the game.
 
 ### Money
+
 - All values are **integer cents** — no floats anywhere.
 - DB stores UTC; UI renders in configured app timezone.
 
 ### Attendance / Chargeable
+
 - Only `going` status is chargeable (`isChargeableStatus` in `packages/recon`).
 - Partial and overpayments are allowed.
 - Balance = sum of ledger entries, cached in `players.current_balance_cents`.
 
 ### Auth
+
 - Login → password verify → MFA TOTP → short-lived JWT + refresh token (HttpOnly cookie).
 - Refresh tokens rotate on use and are revoked on logout.
 - All routes except `/api/auth/*` and `/health` require `Authorization: Bearer <token>`.
@@ -112,6 +116,7 @@ Matching runs during bank CSV import, bank webhook, and Facebook attendance webh
 Entry point: `matchPlayerByAlias(rawDescription, candidates)`.
 
 ### Candidates always include
+
 1. All active `players.display_name` values — every player is matchable without explicit aliases.
 2. All rows from `player_aliases`.
 
@@ -131,14 +136,16 @@ Both are loaded from the DB as `MatchCandidate[]` (`{ playerId, aliasRaw }`) bef
    Viability rules:
    - 1-word alias: the matching token must be ≥ 4 chars.
    - Multi-word alias: ≥ 2 tokens match, **OR** 1 token matches and it is ≥ 5 chars.
-   → `confidence: 0.85`, reason: `token_intersection_match`
+     → `confidence: 0.85`, reason: `token_intersection_match`
 
 3. **No match** — `matched: false`. The candidate with the highest token overlap (even if not
    viable) is still returned as `playerId`. Callers store this in `reconciliation_queue.suggested_player_id`
    so admins get a useful starting point when resolving items manually.
 
 ### Retroactive matching
+
 When aliases are added or updated, call:
+
 - `rescanPendingTransactionsForPlayer(client, playerId)` — re-attempts matching for a single player
   against all open bank transaction queue items.
 - `rescanAllPendingTransactions(client)` — same but for all players.
@@ -146,6 +153,7 @@ When aliases are added or updated, call:
 Both are in `apps/api/src/services/bank-import.ts`.
 
 ### Common failure cases — fix by adding an alias
+
 - Initials: `"J Smith"` → add alias `"J Smith"` for the player.
 - Nicknames: `"Jonno"` → add alias for the player.
 - Single surname: `"Smith"` → add alias `"Smith"` if unambiguous in the league.
@@ -192,6 +200,8 @@ POST  /api/games/:id/attendance/import      auth
 POST  /api/imports/bank-csv                auth
 POST  /api/webhooks/facebook-attendance    x-webhook-secret
 POST  /api/webhooks/bank-transactions      x-webhook-secret
+POST  /api/webhooks/bank-pocketsmith      x-webhook-secret
+GET   /api/bank-transactions              auth
 GET   /api/reconciliation-queue            auth
 POST  /api/reconciliation-queue/:id/resolve auth
 

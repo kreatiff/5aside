@@ -19,6 +19,7 @@ import { settingsRoutes } from "./routes/settings.js";
 import { importRoutes } from "./routes/imports.js";
 import { reconciliationRoutes } from "./routes/reconciliation.js";
 import { ledgerRoutes } from "./routes/ledger.js";
+import { transactionRoutes } from "./routes/transactions.js";
 
 export async function buildServer() {
   const app = Fastify({
@@ -46,6 +47,7 @@ export async function buildServer() {
   await app.register(importRoutes);
   await app.register(reconciliationRoutes);
   await app.register(ledgerRoutes);
+  await app.register(transactionRoutes);
 
   if (env.NODE_ENV === "production") {
     const webDistPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");

@@ -12,6 +12,7 @@ import { GameDetailPage } from "./pages/GameDetailPage";
 import { ImportsPage } from "./pages/ImportsPage";
 import { ReconciliationPage } from "./pages/ReconciliationPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { TransactionsPage } from "./pages/TransactionsPage";
 
 // eslint-disable-next-line react-refresh/only-export-components
 const ProtectedRoute = () => {
@@ -24,7 +25,15 @@ const ProtectedRoute = () => {
           animate={{ scale: [1, 1.08, 1], opacity: [0.7, 1, 0.7] }}
           transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
         >
-          <div className="logo-icon" style={{ width: 56, height: 56, fontSize: "1.75rem", borderRadius: 14 }}>
+          <div
+            className="logo-icon"
+            style={{
+              width: 56,
+              height: 56,
+              fontSize: "1.75rem",
+              borderRadius: 14,
+            }}
+          >
             5
           </div>
         </motion.div>
@@ -63,6 +72,7 @@ export const router = createBrowserRouter([
       { path: "/games", element: <GamesPage /> },
       { path: "/games/:id", element: <GameDetailPage /> },
       { path: "/imports", element: <ImportsPage /> },
+      { path: "/transactions", element: <TransactionsPage /> },
       { path: "/reconciliation", element: <ReconciliationPage /> },
       { path: "/settings", element: <SettingsPage /> },
     ],

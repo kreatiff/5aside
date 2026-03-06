@@ -9,6 +9,7 @@ import {
   Users,
   Calendar,
   Download,
+  Banknote,
   ArrowRightLeft,
   Settings,
   LogOut,
@@ -22,6 +23,7 @@ const routes = [
   { path: "/players", name: "Players", icon: Users },
   { path: "/games", name: "Games", icon: Calendar },
   { path: "/imports", name: "Imports", icon: Download },
+  { path: "/transactions", name: "Transactions", icon: Banknote },
   { path: "/reconciliation", name: "Reconciliation", icon: ArrowRightLeft },
   { path: "/settings", name: "Settings", icon: Settings },
 ];
@@ -30,13 +32,19 @@ export const Layout = ({ children }: { children: ReactNode }) => {
   const { admin, logout } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem("sidebar-collapsed") === "true"; }
-    catch { return false; }
+    try {
+      return localStorage.getItem("sidebar-collapsed") === "true";
+    } catch {
+      return false;
+    }
   });
 
   useEffect(() => {
-    try { localStorage.setItem("sidebar-collapsed", String(collapsed)); }
-    catch { /* noop */ }
+    try {
+      localStorage.setItem("sidebar-collapsed", String(collapsed));
+    } catch {
+      /* noop */
+    }
   }, [collapsed]);
 
   const { data: reconData } = useQuery({
@@ -71,7 +79,10 @@ export const Layout = ({ children }: { children: ReactNode }) => {
           {routes.map((route) => {
             const Icon = route.icon;
             const isActive = location.pathname.startsWith(route.path);
-            const badge = route.path === "/reconciliation" && reconCount > 0 ? reconCount : null;
+            const badge =
+              route.path === "/reconciliation" && reconCount > 0
+                ? reconCount
+                : null;
             return (
               <Link
                 key={route.path}
@@ -81,7 +92,11 @@ export const Layout = ({ children }: { children: ReactNode }) => {
               >
                 <Icon size={20} />
                 <span>{route.name}</span>
-                {badge !== null && <span className="nav-badge">{badge > 99 ? "99+" : badge}</span>}
+                {badge !== null && (
+                  <span className="nav-badge">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -93,7 +108,12 @@ export const Layout = ({ children }: { children: ReactNode }) => {
             <div className="admin-details">
               <span className="admin-email">{admin?.email}</span>
               <span className="admin-role">{admin?.role}</span>
-              <span className="admin-version">v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0'}</span>
+              <span className="admin-version">
+                v
+                {typeof __APP_VERSION__ !== "undefined"
+                  ? __APP_VERSION__
+                  : "0.0.0"}
+              </span>
             </div>
           </div>
           <button className="nav-item logout-btn" onClick={logout}>

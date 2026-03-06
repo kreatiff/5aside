@@ -169,3 +169,20 @@ export const WebhookBankSchema = z.object({
   rows: z.array(BankImportRowSchema).min(1)
 });
 export type WebhookBankInput = z.infer<typeof WebhookBankSchema>;
+
+const PocketsmithTransactionSchema = z.object({
+  id: z.number(),
+  description: z.string(),
+  date: z.string(),
+  amount: z.number(),
+  tagNames: z.array(z.string()).default([]),
+}).passthrough();
+
+const PocketsmithResponseSchema = z.object({
+  response: z.object({
+    transactions: z.array(PocketsmithTransactionSchema).min(1),
+  }).passthrough(),
+});
+
+export const WebhookPocketsmithSchema = z.array(PocketsmithResponseSchema).min(1);
+export type WebhookPocketsmithInput = z.infer<typeof WebhookPocketsmithSchema>;
