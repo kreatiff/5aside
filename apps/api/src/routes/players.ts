@@ -20,15 +20,20 @@ export async function playerRoutes(app: FastifyInstance) {
     const countResult = await query<{ count: string }>(countQuery);
     const total = Number(countResult.rows[0]?.count || 0);
 
+    const cutoffResult = await query<{ cutoff_date: string | null }>(
+      `SELECT cutoff_date::text FROM settings WHERE id = 1`
+    );
+    const cutoff = cutoffResult.rows[0]?.cutoff_date?.slice(0, 10) ?? null;
+
     const whereClause = activeOnly ? `WHERE p.active = true` : ``;
     const result = await query<PlayerRow & { last_game_date: string | null }>(
       `SELECT p.id, p.display_name, p.active, p.current_balance_cents, p.notes, p.created_at, p.updated_at,
-              (SELECT MAX(g.game_date)::text FROM attendance a JOIN games g ON g.id = a.game_id WHERE a.player_id = p.id) AS last_game_date
+              (SELECT MAX(g.game_date)::text FROM attendance a JOIN games g ON g.id = a.game_id WHERE a.player_id = p.id AND a.chargeable = true AND ($3::date IS NULL OR g.game_date >= $3)) AS last_game_date
        FROM players p
        ${whereClause}
        ORDER BY p.display_name ASC
        LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      [limit, offset, cutoff]
     );
     return { 
       data: result.rows.map(row => ({
@@ -261,9 +266,19 @@ export async function playerRoutes(app: FastifyInstance) {
     const limit = Number((request.query as any).limit) || 50;
     const offset = Number((request.query as any).offset) || 0;
 
+    const cutoffResult = await query<{ cutoff_date: string | null }>(
+      `SELECT cutoff_date::text FROM settings WHERE id = 1`
+    );
+    const cutoff = cutoffResult.rows[0]?.cutoff_date?.slice(0, 10) ?? null;
+
     const countResult = await query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM ledger_entries WHERE player_id = $1`,
-      [id]
+      `SELECT COUNT(*)::text AS count
+       FROM ledger_entries le
+       LEFT JOIN games g ON g.id = le.game_id
+       LEFT JOIN bank_transactions bt ON bt.id = le.bank_transaction_id
+       WHERE le.player_id = $1
+         AND ($2::date IS NULL OR COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) >= $2)`,
+      [id, cutoff]
     );
     const total = Number(countResult.rows[0]?.count || 0);
 
@@ -284,9 +299,10 @@ export async function playerRoutes(app: FastifyInstance) {
        LEFT JOIN games g ON g.id = le.game_id
        LEFT JOIN bank_transactions bt ON bt.id = le.bank_transaction_id
        WHERE le.player_id = $1
+         AND ($2::date IS NULL OR COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) >= $2)
        ORDER BY COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) DESC
-       LIMIT $2 OFFSET $3`,
-      [id, limit, offset]
+       LIMIT $3 OFFSET $4`,
+      [id, cutoff, limit, offset]
     );
 
     return {
@@ -349,21 +365,24 @@ export async function playerRoutes(app: FastifyInstance) {
         await client.query(`DELETE FROM players WHERE id = $1`, [sourceId]);
       }
 
-      // Recalculate target balance by summarizing all ledgers
+      // Recalculate target balance by summarizing qualifying ledger entries
+      const cutoffResult = await client.query<{ cutoff_date: string | null }>(
+        `SELECT cutoff_date::text FROM settings WHERE id = 1`
+      );
+      const cutoff = cutoffResult.rows[0]?.cutoff_date?.slice(0, 10) ?? null;
+
       await client.query(`
-        UPDATE players 
+        UPDATE players
         SET current_balance_cents = COALESCE((
-          SELECT SUM(
-            CASE 
-              WHEN type = 'charge' THEN amount_cents
-              WHEN type = 'payment' THEN -amount_cents
-              WHEN type = 'adjustment' THEN amount_cents
-              ELSE 0
-            END
-          ) FROM ledger_entries WHERE player_id = $1
+          SELECT SUM(le.amount_cents)
+          FROM ledger_entries le
+          LEFT JOIN games g ON g.id = le.game_id
+          LEFT JOIN bank_transactions bt ON bt.id = le.bank_transaction_id
+          WHERE le.player_id = $1
+            AND ($2::date IS NULL OR COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) >= $2)
         ), 0)
         WHERE id = $1
-      `, [targetPlayerId]);
+      `, [targetPlayerId, cutoff]);
 
       await client.query('COMMIT');
     } catch (e) {

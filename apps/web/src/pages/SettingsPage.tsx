@@ -7,6 +7,8 @@ import {
   AlertTriangle,
   ShieldCheck,
   Check,
+  Calendar,
+  X,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
@@ -24,6 +26,7 @@ export const SettingsPage = () => {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const [feeInput, setFeeInput] = useState("");
+  const [cutoffInput, setCutoffInput] = useState("");
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ["settings"],
@@ -45,6 +48,8 @@ export const SettingsPage = () => {
     if (settings) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFeeInput((settings.current_game_fee_cents / 100).toString());
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCutoffInput(settings.settings?.cutoffDate ?? settings.cutoff_date ?? "");
     }
   }, [settings]);
 
@@ -58,12 +63,34 @@ export const SettingsPage = () => {
     },
   });
 
+  const updateCutoffMutation = useMutation({
+    mutationFn: async (cutoffDate: string | null) => {
+      await api.patch("/settings/cutoff-date", { cutoffDate });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      addToast("success", "Cutoff date updated. All balances have been recalculated.");
+    },
+    onError: () => {
+      addToast("error", "Failed to update cutoff date");
+    },
+  });
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const dollars = Number(feeInput);
     if (!isNaN(dollars)) {
       updateSettingsMutation.mutate(Math.round(dollars * 100));
     }
+  };
+
+  const handleCutoffApply = () => {
+    updateCutoffMutation.mutate(cutoffInput || null);
+  };
+
+  const handleCutoffClear = () => {
+    setCutoffInput("");
+    updateCutoffMutation.mutate(null);
   };
 
   const hasIssues = integrity?.issues?.length > 0;
@@ -132,6 +159,59 @@ export const SettingsPage = () => {
                 : "Save Settings"}
             </button>
           </form>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-header__title">
+              <Calendar size={20} className="text-primary" />
+              Balance Cutoff Date
+            </h3>
+          </div>
+
+          <p className="text-secondary mb-md">
+            Games and payments before this date will be excluded from all
+            balance calculations and dashboard totals. Data remains in the
+            database but is not counted. Leave empty to include all history.
+          </p>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="cutoff">
+              Cutoff Date
+            </label>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <input
+                id="cutoff"
+                type="date"
+                className="input-field"
+                value={cutoffInput}
+                onChange={(e) => setCutoffInput(e.target.value)}
+              />
+              {cutoffInput && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={handleCutoffClear}
+                  disabled={updateCutoffMutation.isPending}
+                  title="Clear cutoff date"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className={`btn btn-primary ${updateCutoffMutation.isPending ? "btn-loading" : ""}`}
+            disabled={updateCutoffMutation.isPending}
+            onClick={handleCutoffApply}
+          >
+            <Save size={16} />
+            {updateCutoffMutation.isPending
+              ? "Recalculating..."
+              : "Apply Cutoff"}
+          </button>
         </div>
 
         <div className="card">

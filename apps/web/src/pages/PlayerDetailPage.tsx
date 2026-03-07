@@ -114,6 +114,16 @@ export const PlayerDetailPage = () => {
     },
   });
 
+  const { data: appSettings } = useQuery({
+    queryKey: ["settings"],
+    queryFn: async () => {
+      const { data } = await api.get("/settings");
+      return data;
+    },
+  });
+
+  const cutoffDate = appSettings?.settings?.cutoffDate ?? appSettings?.cutoff_date ?? null;
+
   const addAliasMutation = useMutation({
     mutationFn: async ({
       source,
@@ -304,6 +314,11 @@ export const PlayerDetailPage = () => {
                 colorCode
                 animated
               />
+              {cutoffDate && (
+                <p className="text-muted text-sm" style={{ marginTop: "0.25rem" }}>
+                  From {formatDate(cutoffDate)} onwards
+                </p>
+              )}
             </div>
           </div>
         }

@@ -1,16 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { FeeUpdateSchema } from "@fiveaside/contracts";
+import { FeeUpdateSchema, CutoffDateUpdateSchema } from "@fiveaside/contracts";
 import { query, withTransaction } from "../db/helpers.js";
 import { parseBody } from "../utils/request.js";
-import { toIso } from "../utils/mappers.js";
+import { toIso, toDateString } from "../utils/mappers.js";
+import { recalculateAllBalances } from "../services/balance-recalc.js";
 
 export async function settingsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
 
   app.get("/api/settings", async () => {
-    const settingsResult = await query<{ current_game_fee_cents: number; app_timezone: string; updated_at: Date | string }>(
-      `SELECT current_game_fee_cents, app_timezone, updated_at
+    const settingsResult = await query<{ current_game_fee_cents: number; app_timezone: string; cutoff_date: Date | string | null; updated_at: Date | string }>(
+      `SELECT current_game_fee_cents, app_timezone, cutoff_date, updated_at
        FROM settings
        WHERE id = 1`
     );
@@ -31,6 +32,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       settings: {
         currentGameFeeCents: settings.current_game_fee_cents,
         appTimezone: settings.app_timezone,
+        cutoffDate: settings.cutoff_date ? toDateString(settings.cutoff_date) : null,
         updatedAt: toIso(settings.updated_at)!
       },
       history: historyResult.rows.map((row) => ({
@@ -63,6 +65,33 @@ export async function settingsRoutes(app: FastifyInstance) {
         [oldFee, body.newFeeCents, adminId]
       );
       return { oldFee, newFee: body.newFeeCents, changed: true };
+    });
+
+    return result;
+  });
+
+  app.patch("/api/settings/cutoff-date", async (request, reply) => {
+    const body = parseBody(reply, CutoffDateUpdateSchema, request.body);
+
+    const result = await withTransaction(async (client) => {
+      const current = await client.query<{ cutoff_date: Date | string | null }>(
+        `SELECT cutoff_date FROM settings WHERE id = 1 FOR UPDATE`
+      );
+      const oldCutoff = current.rows[0]!.cutoff_date;
+      const oldStr = oldCutoff ? toDateString(oldCutoff) : null;
+
+      if (oldStr === body.cutoffDate) {
+        return { changed: false, cutoffDate: body.cutoffDate };
+      }
+
+      await client.query(
+        `UPDATE settings SET cutoff_date = $1, updated_at = NOW() WHERE id = 1`,
+        [body.cutoffDate]
+      );
+
+      await recalculateAllBalances(client, body.cutoffDate);
+
+      return { changed: true, cutoffDate: body.cutoffDate };
     });
 
     return result;

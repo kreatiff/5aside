@@ -137,6 +137,11 @@ export const FeeUpdateSchema = z.object({
 });
 export type FeeUpdateInput = z.infer<typeof FeeUpdateSchema>;
 
+export const CutoffDateUpdateSchema = z.object({
+  cutoffDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable()
+});
+export type CutoffDateUpdateInput = z.infer<typeof CutoffDateUpdateSchema>;
+
 export const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8)
