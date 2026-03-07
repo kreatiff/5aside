@@ -237,6 +237,20 @@ export const PlayerDetailPage = () => {
     (e: LedgerEntry) => ledgerFilter === "all" || e.type === ledgerFilter,
   );
 
+  const totalChargesCents = useMemo(() => {
+    return (ledger?.data ?? []).reduce((acc: number, entry: LedgerEntry) => {
+      if (entry.type === "charge") return acc + entry.amount_cents;
+      return acc;
+    }, 0);
+  }, [ledger?.data]);
+
+  const totalPaymentsCents = useMemo(() => {
+    return (ledger?.data ?? []).reduce((acc: number, entry: LedgerEntry) => {
+      if (entry.type === "payment") return acc + entry.amount_cents;
+      return acc;
+    }, 0);
+  }, [ledger?.data]);
+
   const mergeCandidates = allPlayers?.filter((p) => p.id !== id) ?? [];
 
   if (isLoading) {
@@ -509,7 +523,29 @@ export const PlayerDetailPage = () => {
       <div className="card mb-lg">
         <div className="card-header">
           <h3 className="card-header__title">Recent Transactions</h3>
-          <div className="gap-sm" style={{ display: "flex" }}>
+          <div
+            className="gap-sm"
+            style={{ display: "flex", alignItems: "center" }}
+          >
+            <div
+              className="flex-align gap-sm"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--spacing-sm)",
+                marginRight: "var(--spacing-md)",
+              }}
+            >
+              <span className="text-muted text-sm">Total Charges:</span>
+              <CurrencyDisplay cents={totalChargesCents} size="sm" />
+              <span
+                className="text-muted text-sm ml-sm"
+                style={{ marginLeft: "var(--spacing-sm)" }}
+              >
+                Total Payments:
+              </span>
+              <CurrencyDisplay cents={totalPaymentsCents} size="sm" />
+            </div>
             {(["all", "charge", "payment"] as const).map((f) => (
               <button
                 key={f}
