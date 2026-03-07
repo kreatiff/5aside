@@ -12,3 +12,5 @@ coverage/
 tmp/
 pgdata/
 *.tsbuildinfo
+5aside_db_export.sql
+5aside.sql.gz

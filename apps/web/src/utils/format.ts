@@ -9,11 +9,24 @@ export function formatCurrency(cents: number): string {
 }
 
 export function formatDate(dateStr: string): string {
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  if (!dateStr) return "";
+  try {
+    const dateOnly = dateStr.split(/[T ]/)[0];
+    const [year, month, day] = dateOnly.split("-").map(Number);
+    const dd = String(day).padStart(2, "0");
+    const mm = String(month).padStart(2, "0");
+    return `${dd}/${mm}/${year}`;
+  } catch (e) {
+    return "";
+  }
+}
+
+/** Parse any date string (YYYY-MM-DD, ISO, or Postgres timestamptz) into a timestamp for sorting */
+export function parseDateToTimestamp(dateStr: string): number {
+  if (!dateStr) return 0;
+  const dateOnly = dateStr.split(/[T ]/)[0];
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  return new Date(year, month - 1, day).getTime();
 }
 
 export function formatDateTime(dateStr: string): string {

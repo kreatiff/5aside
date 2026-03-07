@@ -2,7 +2,16 @@ import { useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { Upload, Edit2, Lock, Save, ExternalLink, XCircle, UserPlus, X } from "lucide-react";
+import {
+  Upload,
+  Edit2,
+  Lock,
+  Save,
+  ExternalLink,
+  XCircle,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { CurrencyDisplay } from "../components/CurrencyDisplay";
@@ -109,7 +118,7 @@ export const GameDetailPage = () => {
       queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
       addToast(
         "success",
-        "Attendance imported successfully. Check the Reconciliation Queue for any unmatched names."
+        "Attendance imported successfully. Check the Reconciliation Queue for any unmatched names.",
       );
     },
   });
@@ -173,7 +182,9 @@ export const GameDetailPage = () => {
 
   // Players not already in the game
   const availablePlayers = useMemo(() => {
-    const attendingIds = new Set(game?.attendance?.map((a) => a.playerId) ?? []);
+    const attendingIds = new Set(
+      game?.attendance?.map((a) => a.playerId) ?? [],
+    );
     return (players ?? []).filter((p) => !attendingIds.has(p.id));
   }, [players, game?.attendance]);
 
@@ -225,7 +236,7 @@ export const GameDetailPage = () => {
         ),
       },
     ],
-    [removePlayerMutation]
+    [removePlayerMutation],
   );
 
   if (isLoading)
@@ -272,7 +283,12 @@ export const GameDetailPage = () => {
             target="_blank"
             rel="noopener noreferrer"
             className="text-link"
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "var(--font-sm)" }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.25rem",
+              fontSize: "var(--font-sm)",
+            }}
           >
             <ExternalLink size={14} />
             Facebook Event
@@ -298,7 +314,10 @@ export const GameDetailPage = () => {
                   onChange={(e) => setFeeInput(e.target.value)}
                 />
               </div>
-              <button className="btn btn-primary btn-sm" onClick={handleSaveFee}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleSaveFee}
+              >
                 <Save size={16} /> Save
               </button>
               <button
@@ -310,7 +329,11 @@ export const GameDetailPage = () => {
             </div>
           ) : (
             <div className="flex-between">
-              <CurrencyDisplay cents={game.feeCents} size="lg" colorCode={false} />
+              <CurrencyDisplay
+                cents={game.feeCents}
+                size="lg"
+                colorCode={false}
+              />
               {isFeeLocked ? (
                 <span className="text-muted" title="Fee locked after sync">
                   <Lock size={16} />
@@ -382,7 +405,8 @@ export const GameDetailPage = () => {
       <div className="card mt-md">
         <div className="card-header">
           <h3 className="card-header__title">
-            Attendance List ({game.attendance?.length || 0})
+            "Yes" Attendees (
+            {game.attendance?.filter((a) => a.chargeable).length || 0})
           </h3>
           <button
             className="btn btn-outline btn-sm"
@@ -405,7 +429,9 @@ export const GameDetailPage = () => {
               onChange={(e) => setAddPlayerId(e.target.value)}
               required
             >
-              <option value="" disabled>Select player…</option>
+              <option value="" disabled>
+                Select player…
+              </option>
               {availablePlayers.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.displayName}
@@ -434,9 +460,9 @@ export const GameDetailPage = () => {
 
         <DataTable<AttendanceRecord>
           columns={attendanceColumns}
-          data={game.attendance ?? []}
+          data={game.attendance?.filter((a) => a.chargeable) ?? []}
           getRowId={(att) => att.id}
-          emptyTitle="No attendance records"
+          emptyTitle="No 'yes' attendees"
           emptyDescription="Import a Facebook poll or add attendance manually."
         />
       </div>

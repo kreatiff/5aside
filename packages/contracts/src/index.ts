@@ -155,7 +155,8 @@ export const RefreshSchema = z.object({
 export type RefreshInput = z.infer<typeof RefreshSchema>;
 
 export const CsvBankUploadSchema = z.object({
-  csv: z.string().min(1)
+  csv: z.string().min(1),
+  excludeExternalIds: z.array(z.string()).optional()
 });
 export type CsvBankUploadInput = z.infer<typeof CsvBankUploadSchema>;
 

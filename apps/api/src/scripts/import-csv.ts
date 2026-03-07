@@ -189,7 +189,7 @@ async function main() {
       await query(`
         INSERT INTO ledger_entries (player_id, type, amount_cents, bank_transaction_id, created_at)
         VALUES ($1, 'payment', $2, $3, $4)
-      `, [matchedPlayerId, amountCents, bTxnId, `${isoDate} 00:00:00Z`]);
+      `, [matchedPlayerId, -amountCents, bTxnId, `${isoDate} 00:00:00Z`]); // store as negative in ledger
       
       await query(`
         UPDATE players SET current_balance_cents = current_balance_cents - $1 WHERE id = $2

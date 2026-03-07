@@ -7,7 +7,7 @@ export type MatchResult =
   | { matched: true; playerId: string; confidence: number; reason: string }
   | { matched: false; playerId: string | null; confidence: number; reason: string };
 
-const NON_WORD_REGEX = /[^a-z0-9]+/g;
+const NON_WORD_REGEX = /[^\p{L}\p{N}]+/gu;
 
 export function normalizeName(raw: string): string {
   return raw.toLowerCase().trim().replace(NON_WORD_REGEX, " ").replace(/\s+/g, " ").trim();
@@ -26,7 +26,7 @@ const STOP_WORDS = new Set([
 export function matchPlayerByAlias(rawName: string, candidates: MatchCandidate[]): MatchResult {
   const txnWords = splitIntoWords(rawName).filter(w => !STOP_WORDS.has(w));
   const txnWordSet = new Set(txnWords);
-  const spacelessTxn = rawName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const spacelessTxn = rawName.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
   let bestMatch: {
     playerId: string;
@@ -41,7 +41,7 @@ export function matchPlayerByAlias(rawName: string, candidates: MatchCandidate[]
   let fallback: { playerId: string; score: number } | null = null;
 
   for (const candidate of candidates) {
-    const normalizedAlias = candidate.aliasRaw.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const normalizedAlias = candidate.aliasRaw.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
     // 1. Spaceless substring match — prefer the longest (most specific) matching alias.
     //    "johnsmith" (9 chars) beats "smith" (5 chars) when both are substrings.

@@ -54,7 +54,7 @@ export async function playerRoutes(app: FastifyInstance) {
       const playerId = playerResult.rows[0]!.id;
 
       // 2. Auto-create alias from display name
-      const aliasNormalized = body.displayName.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const aliasNormalized = body.displayName.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
       await client.query(
         `INSERT INTO player_aliases (player_id, source, alias_raw, alias_normalized)
          VALUES ($1, $2, $3, $4)
@@ -141,7 +141,7 @@ export async function playerRoutes(app: FastifyInstance) {
 
       // If display name changed, update the system alias
       if (body.displayName !== undefined) {
-        const aliasNormalized = body.displayName.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const aliasNormalized = body.displayName.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
         // Delete old system alias if it exists
         await client.query(
           `DELETE FROM player_aliases WHERE player_id = $1 AND source = 'system'`,
@@ -202,7 +202,7 @@ export async function playerRoutes(app: FastifyInstance) {
     }
 
     const { source, aliasRaw } = body;
-    const aliasNormalized = aliasRaw.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const aliasNormalized = aliasRaw.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
     const result = await withTransaction(async (client) => {
       // 1. Insert the new alias
@@ -240,6 +240,22 @@ export async function playerRoutes(app: FastifyInstance) {
     });
   });
 
+  app.delete("/api/players/:id/aliases/:aliasId", async (request, reply) => {
+    const playerId = parseUuidParam(request, reply, "id");
+    const aliasId = parseUuidParam(request, reply, "aliasId");
+
+    const result = await query(
+      `DELETE FROM player_aliases WHERE id = $1 AND player_id = $2`,
+      [aliasId, playerId]
+    );
+
+    if (result.rowCount === 0) {
+      throw reply.notFound("Alias not found");
+    }
+
+    return { deleted: true };
+  });
+
   app.get("/api/players/:id/ledger", async (request, reply) => {
     const id = parseUuidParam(request, reply, "id");
     const limit = Number((request.query as any).limit) || 50;
@@ -257,11 +273,18 @@ export async function playerRoutes(app: FastifyInstance) {
       type: string;
       amount_cents: number;
       created_at: Date;
+      game_date: string | null;
+      bank_posted_at: string | null;
+      adjustment_reason: string | null;
     }>(
-      `SELECT id, player_id, type, amount_cents, created_at
-       FROM ledger_entries
-       WHERE player_id = $1
-       ORDER BY created_at DESC
+      `SELECT le.id, le.player_id, le.type, le.amount_cents, le.created_at, le.adjustment_reason,
+              g.game_date::text AS game_date,
+              bt.posted_at_utc::text AS bank_posted_at
+       FROM ledger_entries le
+       LEFT JOIN games g ON g.id = le.game_id
+       LEFT JOIN bank_transactions bt ON bt.id = le.bank_transaction_id
+       WHERE le.player_id = $1
+       ORDER BY COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) DESC
        LIMIT $2 OFFSET $3`,
       [id, limit, offset]
     );

@@ -19,6 +19,8 @@ type QueueItem = {
     sourceRef?: string;
     amountCents?: number;
     playerName?: string;
+    postedAtUtc?: string;
+    gameDate?: string;
   };
   suggestedPlayerId: string | null;
   confidence: number;
@@ -82,10 +84,16 @@ export const ReconciliationPage = () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["players"] });
       queryClient.invalidateQueries({ queryKey: ["games"] });
-      addToast(
-        "success",
-        `Rescan complete. Mapped ${data.transactionsMapped} transactions.`,
-      );
+      const parts = [];
+      if (data.transactionsMapped > 0)
+        parts.push(`${data.transactionsMapped} transactions`);
+      if (data.attendanceMapped > 0)
+        parts.push(`${data.attendanceMapped} attendance`);
+      const summary =
+        parts.length > 0
+          ? `Mapped ${parts.join(" and ")}.`
+          : "No new matches found.";
+      addToast("success", `Rescan complete. ${summary}`);
     },
   });
 
@@ -104,12 +112,20 @@ export const ReconciliationPage = () => {
         key: "date",
         header: "Date",
         sortable: true,
-        sortValue: (item) => new Date(item.createdAt).getTime(),
-        render: (item) => (
-          <span className="text-secondary">
-            {formatDate(item.createdAt.split("T")[0])}
-          </span>
-        ),
+        sortValue: (item) => {
+          const dt =
+            item.payload.postedAtUtc || item.payload.gameDate || item.createdAt;
+          return new Date(dt).getTime();
+        },
+        render: (item) => {
+          const dt =
+            item.payload.postedAtUtc || item.payload.gameDate || item.createdAt;
+          return (
+            <span className="text-secondary">
+              {formatDate(dt.split("T")[0])}
+            </span>
+          );
+        },
       },
       {
         key: "type",

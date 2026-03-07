@@ -6,6 +6,57 @@ import { withTransaction, query } from "../db/helpers.js";
 import { processBankRows } from "../services/bank-import.js";
 import { insertLedgerEntry } from "../services/ledger.js";
 
+/** Convert dd/mm/yyyy or yyyy-mm-dd to ISO datetime string */
+function parseCsvDate(raw: string): string {
+  const trimmed = raw.trim();
+  // Already ISO-ish (yyyy-mm-dd...)
+  if (/^\d{4}-/.test(trimmed)) {
+    return trimmed.includes("T") ? trimmed : `${trimmed}T00:00:00Z`;
+  }
+  // dd/mm/yyyy
+  const parts = trimmed.split("/");
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    return `${y}-${m!.padStart(2, "0")}-${d!.padStart(2, "0")}T00:00:00Z`;
+  }
+  return trimmed;
+}
+
+/** Dynamically map CSV columns based on header row */
+function mapCsvBankRows(rows: string[][]) {
+  if (rows.length === 0) return [];
+  const header = rows[0]!.map(c => c.toLowerCase().trim());
+  const hasHeader = header.some(h => ['date', 'posted', 'id', 'amount', 'description', 'payee'].includes(h));
+  
+  let dateIdx = 0, descIdx = 1, amountIdx = 2, idIdx = 3, typeIdx = -1;
+  if (hasHeader) {
+    if (header.indexOf("date") >= 0) dateIdx = header.indexOf("date");
+    else if (header.indexOf("posted") >= 0) dateIdx = header.indexOf("posted");
+    
+    if (header.indexOf("description") >= 0) descIdx = header.indexOf("description");
+    else if (header.indexOf("payee") >= 0) descIdx = header.indexOf("payee");
+    
+    if (header.indexOf("amount") >= 0) amountIdx = header.indexOf("amount");
+    
+    if (header.indexOf("id") >= 0) idIdx = header.indexOf("id");
+    else if (header.indexOf("transaction id") >= 0) idIdx = header.indexOf("transaction id");
+
+    if (header.indexOf("type") >= 0) typeIdx = header.indexOf("type");
+  }
+
+  const sourceRows = hasHeader ? rows.slice(1) : rows;
+  return sourceRows
+    .filter((row) => row.length > Math.max(dateIdx, descIdx, amountIdx))
+    .map((row) => ({
+      postedAtUtc: parseCsvDate(row[dateIdx]!),
+      descriptionRaw: row[descIdx]! || '',
+      amountCents: Math.round(Number(row[amountIdx]) * 100),
+      externalTxnId: idIdx >= 0 && row[idIdx] ? row[idIdx] : undefined,
+      sourceRef: typeIdx >= 0 && row[typeIdx] ? row[typeIdx] : undefined
+    }))
+    .filter((mapped) => mapped.amountCents > 0 && !isNaN(mapped.amountCents));
+}
+
 export async function importRoutes(app: FastifyInstance) {
   app.get("/api/imports", { preHandler: [app.requireAuth] }, async (request) => {
     const limit = Number((request.query as any).limit) || 20;
@@ -29,28 +80,57 @@ export async function importRoutes(app: FastifyInstance) {
     };
   });
 
+  app.post("/api/imports/bank-csv/preview", { preHandler: [app.requireAuth] }, async (request, reply) => {
+    const body = parseBody(reply, CsvBankUploadSchema, request.body);
+    const rows = parseCsvLines(body.csv);
+    const mappedRows = mapCsvBankRows(rows);
+
+    // Check which externalTxnIds already exist
+    const externalIds = mappedRows
+      .map((r) => r.externalTxnId)
+      .filter((id): id is string => !!id);
+
+    let existingIds = new Set<string>();
+    if (externalIds.length > 0) {
+      const result = await query<{ external_txn_id: string }>(
+        `SELECT external_txn_id FROM bank_transactions WHERE external_txn_id = ANY($1)`,
+        [externalIds]
+      );
+      existingIds = new Set(result.rows.map((r) => r.external_txn_id));
+    }
+
+    const previewRows = mappedRows.map((r) => ({
+      ...r,
+      duplicate: !!r.externalTxnId && existingIds.has(r.externalTxnId)
+    }));
+
+    const duplicateCount = previewRows.filter((r) => r.duplicate).length;
+
+    return {
+      rows: previewRows,
+      total: previewRows.length,
+      duplicateCount,
+    };
+  });
+
   app.post("/api/imports/bank-csv", { preHandler: [app.requireAuth] }, async (request, reply) => {
     const body = parseBody(reply, CsvBankUploadSchema, request.body);
     const rows = parseCsvLines(body.csv);
-    const hasHeader = rows.length > 0 && rows[0]![0]?.toLowerCase().includes("posted");
-    const sourceRows = hasHeader ? rows.slice(1) : rows;
-    const mappedRows = sourceRows
-      .filter((row) => row.length >= 3)
-      .map((row) => ({
-        postedAtUtc: row[0]!,
-        amountCents: Number(row[1]),
-        descriptionRaw: row[2]!,
-        externalTxnId: row[3] || undefined,
-        sourceRef: row[4] || undefined
-      }));
+    const mappedRows = mapCsvBankRows(rows);
     const parsed = parseBody(reply, BankImportSchema, { rows: mappedRows, mode: "csv" });
+
+    // Filter out excluded rows (duplicates + user-discarded)
+    const excludeSet = new Set(body.excludeExternalIds ?? []);
+    const filteredRows = excludeSet.size > 0
+      ? parsed.rows.filter((r: any) => !r.externalTxnId || !excludeSet.has(r.externalTxnId))
+      : parsed.rows;
 
     const result = await withTransaction(async (client) => {
       const importRow = await client.query<{ id: string }>(
         `INSERT INTO imports (source_type, mode, checksum, record_count, status)
          VALUES ('bank', 'csv', NULL, $1, 'processing')
          RETURNING id`,
-        [parsed.rows.length]
+        [filteredRows.length]
       );
       const importId = importRow.rows[0]!.id;
 
@@ -68,7 +148,7 @@ export async function importRoutes(app: FastifyInstance) {
         if (row.alias_raw) candidates.push({ playerId: row.player_id, aliasRaw: row.alias_raw });
       }
 
-      const { posted, queued } = await processBankRows(client, parsed.rows, candidates);
+      const { posted, queued } = await processBankRows(client, filteredRows, candidates);
 
       await client.query(`UPDATE imports SET status = 'completed', completed_at = NOW() WHERE id = $1`, [importId]);
       return { importId, posted, queued };

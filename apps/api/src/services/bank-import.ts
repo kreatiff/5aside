@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { matchPlayerByAlias, type MatchCandidate } from "@fiveaside/recon";
+import { matchPlayerByAlias, isChargeableStatus, type MatchCandidate } from "@fiveaside/recon";
 import { insertLedgerEntry } from "./ledger.js";
 
 type ProcessBankRowInput = {
@@ -95,7 +95,8 @@ export async function rescanPendingTransactionsForPlayer(client: PoolClient, pla
     }
   }
 
-  const queueItems = await client.query<{
+  // Rescan bank transactions
+  const bankItems = await client.query<{
     id: string;
     source_record_id: string;
     description_raw: string;
@@ -108,7 +109,7 @@ export async function rescanPendingTransactionsForPlayer(client: PoolClient, pla
      FOR UPDATE OF rq`
   );
 
-  for (const item of queueItems.rows) {
+  for (const item of bankItems.rows) {
     const match = matchPlayerByAlias(item.description_raw, candidates);
     if (match.matched && match.playerId === playerId) {
       await insertLedgerEntry(client, {
@@ -129,11 +130,72 @@ export async function rescanPendingTransactionsForPlayer(client: PoolClient, pla
     }
   }
 
+  // Rescan attendance items for this specific player
+  const attendanceItems = await client.query<{
+    id: string;
+    source_record_id: string;
+    payload: Record<string, unknown> | null;
+  }>(
+    `SELECT rq.id, rq.source_record_id, rq.payload
+     FROM reconciliation_queue rq
+     WHERE rq.item_type = 'attendance' AND rq.status = 'open'
+     FOR UPDATE OF rq`
+  );
+
+  for (const item of attendanceItems.rows) {
+    const payload = item.payload ?? {};
+    const playerName = String(payload.playerName ?? "");
+    if (!playerName) continue;
+
+    const match = matchPlayerByAlias(playerName, candidates);
+    if (!match.matched || match.playerId !== playerId) continue;
+
+    const sourceStatus = String(payload.sourceStatus ?? "unknown");
+    const sourceRef = payload.sourceRef ? String(payload.sourceRef) : null;
+    const chargeable = isChargeableStatus(sourceStatus);
+
+    const attendance = await client.query<{ id: string }>(
+      `INSERT INTO attendance (game_id, player_id, source_status, chargeable, source_ref)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (game_id, player_id) DO NOTHING
+       RETURNING id`,
+      [item.source_record_id, playerId, sourceStatus, chargeable, sourceRef]
+    );
+
+    // Only create ledger entry if attendance was newly inserted (not duplicate)
+    if (attendance.rowCount !== 0 && chargeable) {
+      const game = await client.query<{ fee_cents: number }>(
+        `SELECT fee_cents FROM games WHERE id = $1`,
+        [item.source_record_id]
+      );
+      if (game.rowCount !== 0) {
+        await insertLedgerEntry(client, {
+          playerId,
+          type: "charge",
+          amountCents: game.rows[0]!.fee_cents,
+          gameId: item.source_record_id,
+          attendanceId: attendance.rows[0]!.id
+        });
+      }
+    }
+
+    // Always resolve the queue item — attendance either exists or was just created
+    await client.query(
+      `UPDATE reconciliation_queue 
+       SET status = 'resolved', resolved_by = NULL, resolved_at = NOW() 
+       WHERE id = $1`,
+      [item.id]
+    );
+
+    mappedCount++;
+  }
+
   return mappedCount;
 }
 
 export async function rescanAllPendingTransactions(client: PoolClient) {
-  let mappedCount = 0;
+  let transactionsMapped = 0;
+  let attendanceMapped = 0;
 
   const aliases = await client.query<{ player_id: string; alias_raw: string }>(
     `SELECT player_id, alias_raw FROM player_aliases`
@@ -143,7 +205,7 @@ export async function rescanAllPendingTransactions(client: PoolClient) {
   );
   
   if (aliases.rowCount === 0 && players.rowCount === 0) {
-    return 0;
+    return { transactionsMapped: 0, attendanceMapped: 0 };
   }
 
   const candidates: MatchCandidate[] = [];
@@ -158,21 +220,39 @@ export async function rescanAllPendingTransactions(client: PoolClient) {
     }
   }
 
-  const queueItems = await client.query<{
+  // Rescan bank transactions
+  const bankItems = await client.query<{
     id: string;
     source_record_id: string;
     description_raw: string;
     amount_cents: number;
+    payload: Record<string, unknown> | null;
   }>(
-    `SELECT rq.id, rq.source_record_id, bt.description_raw, bt.amount_cents
+    `SELECT rq.id, rq.source_record_id, bt.description_raw, bt.amount_cents, rq.payload
      FROM reconciliation_queue rq
      JOIN bank_transactions bt ON rq.source_record_id = bt.id
      WHERE rq.item_type = 'bank_transaction' AND rq.status = 'open'
      FOR UPDATE OF rq`
   );
 
-  for (const item of queueItems.rows) {
-    const match = matchPlayerByAlias(item.description_raw, candidates);
+  for (const item of bankItems.rows) {
+    // Tag-first matching: try tagNames from stored payload before description
+    let match = { matched: false, playerId: null as string | null, confidence: 0, reason: "no_match" } as ReturnType<typeof matchPlayerByAlias>;
+    const tagNames = item.payload?.tagNames;
+    if (Array.isArray(tagNames)) {
+      for (const tag of tagNames) {
+        if (!tag || String(tag).trim().length === 0) continue;
+        const tagMatch = matchPlayerByAlias(String(tag), candidates);
+        if (tagMatch.matched) {
+          match = tagMatch;
+          break;
+        }
+      }
+    }
+    if (!match.matched) {
+      match = matchPlayerByAlias(item.description_raw, candidates);
+    }
+
     if (match.matched && match.playerId) {
       await insertLedgerEntry(client, {
         playerId: match.playerId,
@@ -188,9 +268,69 @@ export async function rescanAllPendingTransactions(client: PoolClient) {
         [item.id]
       );
       
-      mappedCount++;
+      transactionsMapped++;
     }
   }
 
-  return mappedCount;
+  // Rescan attendance items
+  const attendanceItems = await client.query<{
+    id: string;
+    source_record_id: string;
+    payload: Record<string, unknown> | null;
+  }>(
+    `SELECT rq.id, rq.source_record_id, rq.payload
+     FROM reconciliation_queue rq
+     WHERE rq.item_type = 'attendance' AND rq.status = 'open'
+     FOR UPDATE OF rq`
+  );
+
+  for (const item of attendanceItems.rows) {
+    const payload = item.payload ?? {};
+    const playerName = String(payload.playerName ?? "");
+    if (!playerName) continue;
+
+    const match = matchPlayerByAlias(playerName, candidates);
+    if (!match.matched || !match.playerId) continue;
+
+    const sourceStatus = String(payload.sourceStatus ?? "unknown");
+    const sourceRef = payload.sourceRef ? String(payload.sourceRef) : null;
+    const chargeable = isChargeableStatus(sourceStatus);
+
+    const attendance = await client.query<{ id: string }>(
+      `INSERT INTO attendance (game_id, player_id, source_status, chargeable, source_ref)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (game_id, player_id) DO NOTHING
+       RETURNING id`,
+      [item.source_record_id, match.playerId, sourceStatus, chargeable, sourceRef]
+    );
+
+    // Only create ledger entry if attendance was newly inserted (not duplicate)
+    if (attendance.rowCount !== 0 && chargeable) {
+      const game = await client.query<{ fee_cents: number }>(
+        `SELECT fee_cents FROM games WHERE id = $1`,
+        [item.source_record_id]
+      );
+      if (game.rowCount !== 0) {
+        await insertLedgerEntry(client, {
+          playerId: match.playerId,
+          type: "charge",
+          amountCents: game.rows[0]!.fee_cents,
+          gameId: item.source_record_id,
+          attendanceId: attendance.rows[0]!.id
+        });
+      }
+    }
+
+    // Always resolve the queue item — attendance either exists or was just created
+    await client.query(
+      `UPDATE reconciliation_queue 
+       SET status = 'resolved', resolved_by = NULL, resolved_at = NOW() 
+       WHERE id = $1`,
+      [item.id]
+    );
+
+    attendanceMapped++;
+  }
+
+  return { transactionsMapped, attendanceMapped };
 }

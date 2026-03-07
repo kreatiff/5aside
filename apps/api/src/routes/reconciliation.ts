@@ -34,6 +34,8 @@ export async function reconciliationRoutes(app: FastifyInstance) {
       bt_external_id: string | null;
       bt_source_ref: string | null;
       bt_amount: number | null;
+      bt_posted_at: Date | string | null;
+      game_date: Date | string | null;
     }>(
       `SELECT
          rq.id, rq.item_type, rq.source_record_id, rq.payload, rq.suggested_player_id,
@@ -41,9 +43,12 @@ export async function reconciliationRoutes(app: FastifyInstance) {
          bt.description_raw as bt_description,
          bt.external_txn_id as bt_external_id,
          bt.source_ref as bt_source_ref,
-         bt.amount_cents as bt_amount
+         bt.amount_cents as bt_amount,
+         bt.posted_at_utc as bt_posted_at,
+         g.game_date
        FROM reconciliation_queue rq
        LEFT JOIN bank_transactions bt ON rq.item_type = 'bank_transaction' AND rq.source_record_id = bt.id
+       LEFT JOIN games g ON rq.item_type = 'attendance' AND rq.source_record_id = g.id
        WHERE rq.status = 'open'
        ORDER BY rq.confidence DESC, rq.id ASC
        LIMIT $1 OFFSET $2`,
@@ -61,6 +66,12 @@ export async function reconciliationRoutes(app: FastifyInstance) {
             externalTxnId: row.bt_external_id,
             sourceRef: row.bt_source_ref,
             amountCents: row.bt_amount ? Number(row.bt_amount) : 0,
+            postedAtUtc: row.bt_posted_at ? toIso(row.bt_posted_at) : undefined,
+          };
+        } else if (row.item_type === 'attendance') {
+          enhancedPayload = {
+            ...enhancedPayload,
+            gameDate: row.game_date ? toIso(row.game_date) : undefined,
           };
         }
 
@@ -86,12 +97,12 @@ export async function reconciliationRoutes(app: FastifyInstance) {
 
   app.post("/api/reconciliation-queue/rescan", async (request, reply) => {
     const result = await withTransaction(async (client) => {
-      const mappedCount = await rescanAllPendingTransactions(client);
-      return { mappedCount };
+      return await rescanAllPendingTransactions(client);
     });
 
     return reply.status(200).send({
-      transactionsMapped: result.mappedCount
+      transactionsMapped: result.transactionsMapped,
+      attendanceMapped: result.attendanceMapped
     });
   });
 

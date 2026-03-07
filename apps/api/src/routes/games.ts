@@ -30,7 +30,7 @@ export async function gameRoutes(app: FastifyInstance) {
     const result = await query<GameRow & { attendance_count: string }>(
       `SELECT g.id, g.external_event_id, g.facebook_event_url, g.game_date, g.kickoff_at_utc,
               g.fee_cents, g.source, g.status, g.created_at, g.updated_at,
-              (SELECT COUNT(*)::text FROM attendance a WHERE a.game_id = g.id) AS attendance_count
+              (SELECT COUNT(*)::text FROM attendance a WHERE a.game_id = g.id AND a.chargeable = true) AS attendance_count
        FROM games g
        ORDER BY g.game_date DESC, g.kickoff_at_utc DESC NULLS LAST
        LIMIT $1 OFFSET $2`,
