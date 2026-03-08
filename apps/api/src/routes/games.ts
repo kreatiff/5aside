@@ -453,8 +453,9 @@ export async function gameRoutes(app: FastifyInstance) {
               le.created_at::text AS created_at, g.game_date::text AS game_date
        FROM ledger_entries le
        LEFT JOIN games g ON g.id = le.game_id
+       LEFT JOIN bank_transactions bt ON bt.id = le.bank_transaction_id
        WHERE le.player_id = ANY($1)
-         AND ($2::date IS NULL OR COALESCE(g.game_date, le.created_at::date) >= $2)
+         AND ($2::date IS NULL OR COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) >= $2)
        ORDER BY le.created_at ASC`,
       [playerIds, cutoffDate]
     );

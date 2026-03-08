@@ -23,7 +23,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const balanceResult = await query<{ total_outstanding_cents: string }>(
       `SELECT SUM(current_balance_cents)::text AS total_outstanding_cents
        FROM players
-       WHERE current_balance_cents < 0`
+       WHERE current_balance_cents > 0`
     );
 
     const gamesResult = await query<{ games_this_month: string; games_total: string }>(

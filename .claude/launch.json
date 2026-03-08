@@ -3,14 +3,14 @@
   "configurations": [
     {
       "name": "api",
-      "runtimeExecutable": "npm.cmd",
-      "runtimeArgs": ["run", "dev:api"],
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "npm", "run", "dev:api"],
       "port": 5170
     },
     {
       "name": "web",
-      "runtimeExecutable": "npm.cmd",
-      "runtimeArgs": ["run", "dev:web"],
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "npm", "run", "dev:web"],
       "port": 5173
     }
   ]
