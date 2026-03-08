@@ -10,8 +10,8 @@ export async function settingsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
 
   app.get("/api/settings", async () => {
-    const settingsResult = await query<{ current_game_fee_cents: number; app_timezone: string; cutoff_date: Date | string | null; updated_at: Date | string }>(
-      `SELECT current_game_fee_cents, app_timezone, cutoff_date, updated_at
+    const settingsResult = await query<{ current_game_fee_cents: number; venue_game_fee_cents: number; app_timezone: string; cutoff_date: Date | string | null; updated_at: Date | string }>(
+      `SELECT current_game_fee_cents, venue_game_fee_cents, app_timezone, cutoff_date, updated_at
        FROM settings
        WHERE id = 1`
     );
@@ -31,6 +31,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     return {
       settings: {
         currentGameFeeCents: settings.current_game_fee_cents,
+        venueGameFeeCents: settings.venue_game_fee_cents,
         appTimezone: settings.app_timezone,
         cutoffDate: settings.cutoff_date ? toDateString(settings.cutoff_date) : null,
         updatedAt: toIso(settings.updated_at)!
@@ -64,6 +65,25 @@ export async function settingsRoutes(app: FastifyInstance) {
          VALUES ($1, $2, $3)`,
         [oldFee, body.newFeeCents, adminId]
       );
+      return { oldFee, newFee: body.newFeeCents, changed: true };
+    });
+
+    return result;
+  });
+
+  app.patch("/api/settings/venue-game-fee", async (request, reply) => {
+    const body = parseBody(reply, FeeUpdateSchema, request.body);
+
+    const result = await withTransaction(async (client) => {
+      const settings = await client.query<{ venue_game_fee_cents: number }>(
+        `SELECT venue_game_fee_cents FROM settings WHERE id = 1 FOR UPDATE`
+      );
+      const oldFee = settings.rows[0]!.venue_game_fee_cents;
+      if (oldFee === body.newFeeCents) {
+        return { oldFee, newFee: body.newFeeCents, changed: false };
+      }
+
+      await client.query(`UPDATE settings SET venue_game_fee_cents = $1, updated_at = NOW() WHERE id = 1`, [body.newFeeCents]);
       return { oldFee, newFee: body.newFeeCents, changed: true };
     });
 

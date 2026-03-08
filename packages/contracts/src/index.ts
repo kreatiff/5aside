@@ -69,6 +69,7 @@ export type GameCreateInput = z.infer<typeof GameCreateSchema>;
 
 export const GameUpdateSchema = z.object({
   feeCents: z.number().int().positive().optional(),
+  venueFeeCents: z.number().int().positive().optional(),
   status: GameStatusSchema.optional()
 });
 export type GameUpdateInput = z.infer<typeof GameUpdateSchema>;
@@ -104,7 +105,8 @@ export const BankImportRowSchema = z.object({
   postedAtUtc: z.string().datetime(),
   amountCents: z.number().int().positive(),
   descriptionRaw: z.string().min(1),
-  sourceRef: z.string().optional()
+  sourceRef: z.string().optional(),
+  isOutgoing: z.boolean().optional()
 });
 export type BankImportRow = z.infer<typeof BankImportRowSchema>;
 
@@ -121,9 +123,13 @@ export const AdjustmentCreateSchema = z.object({
 });
 export type AdjustmentCreateInput = z.infer<typeof AdjustmentCreateSchema>;
 
-export const ReconcileResolveSchema = z.object({
-  playerId: z.string().uuid()
-});
+export const VenueExpenseCategorySchema = z.enum(["game_fees", "equipment"]);
+export type VenueExpenseCategory = z.infer<typeof VenueExpenseCategorySchema>;
+
+export const ReconcileResolveSchema = z.union([
+  z.object({ playerId: z.string().uuid() }),
+  z.object({ venueCategory: VenueExpenseCategorySchema })
+]);
 export type ReconcileResolveInput = z.infer<typeof ReconcileResolveSchema>;
 
 export const AttendanceManualAddSchema = z.object({

@@ -26,6 +26,7 @@ export const SettingsPage = () => {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const [feeInput, setFeeInput] = useState("");
+  const [venueFeeInput, setVenueFeeInput] = useState("");
   const [cutoffInput, setCutoffInput] = useState("");
 
   const { data: settings, isLoading } = useQuery({
@@ -46,10 +47,13 @@ export const SettingsPage = () => {
 
   useEffect(() => {
     if (settings) {
+      const s = settings.settings ?? settings;
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFeeInput((settings.current_game_fee_cents / 100).toString());
+      setFeeInput(((s.currentGameFeeCents ?? s.current_game_fee_cents ?? 0) / 100).toString());
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCutoffInput(settings.settings?.cutoffDate ?? settings.cutoff_date ?? "");
+      setVenueFeeInput(((s.venueGameFeeCents ?? s.venue_game_fee_cents ?? 0) / 100).toString());
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCutoffInput(s.cutoffDate ?? s.cutoff_date ?? "");
     }
   }, [settings]);
 
@@ -60,6 +64,17 @@ export const SettingsPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
       addToast("success", "Settings saved successfully");
+    },
+  });
+
+  const updateVenueFeeMutation = useMutation({
+    mutationFn: async (feeCents: number) => {
+      await api.patch("/settings/venue-game-fee", { newFeeCents: feeCents });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
+      queryClient.invalidateQueries({ queryKey: ["games"] });
+      addToast("success", "Venue game fee updated");
     },
   });
 
@@ -81,6 +96,14 @@ export const SettingsPage = () => {
     const dollars = Number(feeInput);
     if (!isNaN(dollars)) {
       updateSettingsMutation.mutate(Math.round(dollars * 100));
+    }
+  };
+
+  const handleSaveVenueFee = (e: React.FormEvent) => {
+    e.preventDefault();
+    const dollars = Number(venueFeeInput);
+    if (!isNaN(dollars) && dollars > 0) {
+      updateVenueFeeMutation.mutate(Math.round(dollars * 100));
     }
   };
 
@@ -157,6 +180,48 @@ export const SettingsPage = () => {
               {updateSettingsMutation.isPending
                 ? "Saving..."
                 : "Save Settings"}
+            </button>
+          </form>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-header__title">
+              <Settings size={20} className="text-primary" />
+              Venue Game Fee
+            </h3>
+          </div>
+
+          <form onSubmit={handleSaveVenueFee}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="venueFee">
+                Default Venue Game Fee
+              </label>
+              <div className="input-group">
+                <span className="input-group__prefix">$</span>
+                <input
+                  id="venueFee"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="input-field"
+                  value={venueFeeInput}
+                  onChange={(e) => setVenueFeeInput(e.target.value)}
+                  required
+                />
+              </div>
+              <p className="form-hint">
+                The weekly venue rental cost. Applied to newly created games. Does not affect past games.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              className={`btn btn-primary ${updateVenueFeeMutation.isPending ? "btn-loading" : ""}`}
+              disabled={updateVenueFeeMutation.isPending}
+            >
+              <Save size={16} />
+              {updateVenueFeeMutation.isPending ? "Saving..." : "Save Venue Fee"}
             </button>
           </form>
         </div>

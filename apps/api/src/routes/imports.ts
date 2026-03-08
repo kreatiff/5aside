@@ -57,8 +57,15 @@ function mapCsvBankRows(rows: string[][]) {
     }))
     .filter((mapped) => {
       if (isNaN(mapped.amountCents)) return false;
-      if (mapped.amountCents <= 0) return false; // negative = refund/debit, zero = no-op; skip both
+      if (mapped.amountCents === 0) return false; // zero = no-op; skip
       return true;
+    })
+    .map((mapped) => {
+      // Negative amounts are outgoing payments (venue fees, equipment, etc.)
+      if (mapped.amountCents < 0) {
+        return { ...mapped, amountCents: Math.abs(mapped.amountCents), isOutgoing: true };
+      }
+      return { ...mapped, isOutgoing: false };
     });
 }
 

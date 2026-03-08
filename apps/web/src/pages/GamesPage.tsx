@@ -9,7 +9,7 @@ import { DataTable, type Column } from "../components/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
 import { CurrencyDisplay } from "../components/CurrencyDisplay";
 import { useToast } from "../contexts/ToastContext";
-import { formatDate } from "../utils/format";
+import { formatDate, formatCurrency } from "../utils/format";
 
 type Game = {
   id: string;
@@ -143,6 +143,19 @@ export const GamesPage = () => {
     queryFn: async () => {
       const { data } = await api.get("/settings");
       return data;
+    },
+  });
+
+  const { data: venueSummary } = useQuery({
+    queryKey: ["games", "venue-summary"],
+    queryFn: async () => {
+      const { data } = await api.get("/games/venue-summary");
+      return data as {
+        totalVenueFeeCents: number;
+        totalVenuePaidCents: number;
+        outstandingCents: number;
+        gameCount: number;
+      };
     },
   });
 
@@ -331,6 +344,41 @@ export const GamesPage = () => {
           </div>
         }
       />
+
+      {venueSummary && venueSummary.gameCount > 0 && (
+        <div className="card mb-md">
+          <div className="card-header">
+            <h3 className="card-header__title">Venue Fees Overview</h3>
+          </div>
+          <div className="payment-summary-card">
+            <div className="payment-summary-card__stats">
+              <div className="payment-summary-card__stat">
+                <span className="payment-summary-card__stat-label">Game Fees Owed</span>
+                <CurrencyDisplay cents={venueSummary.totalVenueFeeCents} size="md" colorCode={false} />
+              </div>
+              <div className="payment-summary-card__stat">
+                <span className="payment-summary-card__stat-label">Game Fees Paid</span>
+                <CurrencyDisplay cents={venueSummary.totalVenuePaidCents} size="md" colorCode={false} />
+              </div>
+              <div className="payment-summary-card__stat">
+                <span className="payment-summary-card__stat-label">Outstanding</span>
+                <CurrencyDisplay cents={venueSummary.outstandingCents} size="md" />
+              </div>
+            </div>
+            {venueSummary.totalVenueFeeCents > 0 && (
+              <div className="payment-progress-bar">
+                <div
+                  className="payment-progress-bar__fill"
+                  style={{ width: `${Math.min(100, Math.round((venueSummary.totalVenuePaidCents / venueSummary.totalVenueFeeCents) * 100))}%` }}
+                />
+              </div>
+            )}
+            <div className="text-muted text-sm" style={{ padding: "0 var(--spacing-md) var(--spacing-sm)" }}>
+              {venueSummary.gameCount} games tracked &middot; {formatCurrency(Math.round(venueSummary.totalVenueFeeCents / venueSummary.gameCount))} avg per game
+            </div>
+          </div>
+        </div>
+      )}
 
       <DataTable<Game>
         columns={columns}

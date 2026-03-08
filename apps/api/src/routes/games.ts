@@ -10,7 +10,7 @@ import { extractFacebookEventId } from "../utils/facebook.js";
 import { generateGameDates } from "../utils/dates.js";
 import { pairPaymentsToCharges, type ChargeEntry, type PaymentEntry } from "../services/payment-pairing.js";
 
-const GAME_COLS = `id, external_event_id, facebook_event_url, game_date, kickoff_at_utc, fee_cents, source, status, created_at, updated_at`;
+const GAME_COLS = `id, external_event_id, facebook_event_url, game_date, kickoff_at_utc, fee_cents, venue_fee_cents, source, status, created_at, updated_at`;
 
 export async function gameRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
@@ -30,7 +30,7 @@ export async function gameRoutes(app: FastifyInstance) {
 
     const result = await query<GameRow & { attendance_count: string }>(
       `SELECT g.id, g.external_event_id, g.facebook_event_url, g.game_date, g.kickoff_at_utc,
-              g.fee_cents, g.source, g.status, g.created_at, g.updated_at,
+              g.fee_cents, g.venue_fee_cents, g.source, g.status, g.created_at, g.updated_at,
               (SELECT COUNT(*)::text FROM attendance a WHERE a.game_id = g.id AND a.chargeable = true) AS attendance_count
        FROM games g
        ORDER BY g.game_date DESC, g.kickoff_at_utc DESC NULLS LAST
@@ -52,20 +52,21 @@ export async function gameRoutes(app: FastifyInstance) {
     const body = parseBody(reply, GameCreateSchema, request.body);
 
     const created = await withTransaction(async (client) => {
-      const settings = await client.query<{ current_game_fee_cents: number }>(
-        `SELECT current_game_fee_cents FROM settings WHERE id = 1`
+      const settings = await client.query<{ current_game_fee_cents: number; venue_game_fee_cents: number }>(
+        `SELECT current_game_fee_cents, venue_game_fee_cents FROM settings WHERE id = 1`
       );
       const snapshotFee = snapshotFeeForGame(settings.rows[0]!.current_game_fee_cents);
+      const venueFeeCents = settings.rows[0]!.venue_game_fee_cents;
 
       const eventId = body.facebookEventUrl
         ? extractFacebookEventId(body.facebookEventUrl)
         : (body.externalEventId ?? null);
 
       const inserted = await client.query<GameRow>(
-        `INSERT INTO games (external_event_id, facebook_event_url, game_date, kickoff_at_utc, fee_cents, source, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO games (external_event_id, facebook_event_url, game_date, kickoff_at_utc, fee_cents, venue_fee_cents, source, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING ${GAME_COLS}`,
-        [eventId, body.facebookEventUrl ?? null, body.gameDate, body.kickoffAtUtc ?? null, snapshotFee, body.source, body.status]
+        [eventId, body.facebookEventUrl ?? null, body.gameDate, body.kickoffAtUtc ?? null, snapshotFee, venueFeeCents, body.source, body.status]
       );
       return inserted.rows[0]!;
     });
@@ -81,10 +82,11 @@ export async function gameRoutes(app: FastifyInstance) {
     const today = new Date().toISOString().slice(0, 10);
 
     const created = await withTransaction(async (client) => {
-      const settings = await client.query<{ current_game_fee_cents: number }>(
-        `SELECT current_game_fee_cents FROM settings WHERE id = 1`
+      const settings = await client.query<{ current_game_fee_cents: number; venue_game_fee_cents: number }>(
+        `SELECT current_game_fee_cents, venue_game_fee_cents FROM settings WHERE id = 1`
       );
       const snapshotFee = snapshotFeeForGame(settings.rows[0]!.current_game_fee_cents);
+      const venueFeeCents = settings.rows[0]!.venue_game_fee_cents;
 
       const games: GameRow[] = [];
 
@@ -95,10 +97,10 @@ export async function gameRoutes(app: FastifyInstance) {
         const status = gameDate >= today ? "scheduled" : "pending";
 
         const inserted = await client.query<GameRow>(
-          `INSERT INTO games (external_event_id, facebook_event_url, game_date, kickoff_at_utc, fee_cents, source, status)
-           VALUES ($1, $2, $3, NULL, $4, 'facebook', $5)
+          `INSERT INTO games (external_event_id, facebook_event_url, game_date, kickoff_at_utc, fee_cents, venue_fee_cents, source, status)
+           VALUES ($1, $2, $3, NULL, $4, $5, 'facebook', $6)
            RETURNING ${GAME_COLS}`,
-          [eventId, url, gameDate, snapshotFee, status]
+          [eventId, url, gameDate, snapshotFee, venueFeeCents, status]
         );
         games.push(inserted.rows[0]!);
       }
@@ -165,6 +167,30 @@ export async function gameRoutes(app: FastifyInstance) {
         successful: result.filter(r => r.success).length,
         failed: result.filter(r => !r.success).length
       }
+    };
+  });
+
+  // ── Venue fees summary ────────────────────────────────────────────────────
+  app.get("/api/games/venue-summary", async () => {
+    const gamesResult = await query<{ total_owed: string; game_count: string }>(
+      `SELECT
+         COALESCE(SUM(g.venue_fee_cents), 0)::text AS total_owed,
+         COUNT(g.id) FILTER (WHERE g.venue_fee_cents IS NOT NULL)::text AS game_count
+       FROM games g
+       WHERE g.status != 'cancelled'`
+    );
+    const paidResult = await query<{ total_paid: string }>(
+      `SELECT COALESCE(SUM(bt.amount_cents), 0)::text AS total_paid
+       FROM bank_transactions bt
+       WHERE bt.venue_category = 'game_fees'`
+    );
+    const totalOwed = Number(gamesResult.rows[0]!.total_owed);
+    const totalPaid = Number(paidResult.rows[0]!.total_paid);
+    return {
+      totalVenueFeeCents: totalOwed,
+      totalVenuePaidCents: totalPaid,
+      outstandingCents: totalOwed - totalPaid,
+      gameCount: Number(gamesResult.rows[0]!.game_count),
     };
   });
 
@@ -247,14 +273,15 @@ export async function gameRoutes(app: FastifyInstance) {
       }
 
       const newFee = body.feeCents ?? currentGame.fee_cents;
+      const newVenueFee = body.venueFeeCents ?? currentGame.venue_fee_cents;
       const newStatus = body.status ?? currentGame.status;
 
       const result = await client.query<GameRow>(
         `UPDATE games
-         SET fee_cents = $1, status = $2, updated_at = NOW()
-         WHERE id = $3
+         SET fee_cents = $1, venue_fee_cents = $2, status = $3, updated_at = NOW()
+         WHERE id = $4
          RETURNING ${GAME_COLS}`,
-        [newFee, newStatus, id]
+        [newFee, newVenueFee, newStatus, id]
       );
       return result.rows[0]!;
     });

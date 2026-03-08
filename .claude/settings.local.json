@@ -12,7 +12,11 @@
       "Bash(curl -X POST http://192.168.1.71:4000/api/webhooks/facebook-attendance -H \"x-webhook-secret: amU5pu05a0QuG48khlXdIGuD2GqgJ9aoJSD1CNWnkvs\" -H \"Content-Type: application/json\" -d '{:*)",
       "Bash(npm run test)",
       "mcp__Claude_Preview__preview_start",
-      "Bash(npm run test -- --run)"
+      "Bash(npm run test -- --run)",
+      "Bash(source .env)",
+      "Bash(export DATABASE_URL)",
+      "Bash(psql \"$DATABASE_URL\" -c \"SELECT name FROM pgmigrations ORDER BY run_on;\")",
+      "mcp__19b81b1f-fd52-4637-9244-fff317d25cba__list_projects"
     ]
   }
 }

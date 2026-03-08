@@ -9,6 +9,7 @@ type ProcessBankRowInput = {
   descriptionRaw: string;
   sourceRef?: string;
   tagNames?: string[];
+  isOutgoing?: boolean;
 };
 
 export async function processBankRows(client: PoolClient, rows: ProcessBankRowInput[], candidates: MatchCandidate[]) {
@@ -16,12 +17,14 @@ export async function processBankRows(client: PoolClient, rows: ProcessBankRowIn
   let queued = 0;
 
   for (const row of rows) {
+    const isOutgoing = row.isOutgoing ?? false;
+
     const inserted = await client.query<{ id: string }>(
-      `INSERT INTO bank_transactions (external_txn_id, posted_at_utc, amount_cents, description_raw, source_ref)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO bank_transactions (external_txn_id, posted_at_utc, amount_cents, description_raw, source_ref, is_outgoing)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (external_txn_id) DO NOTHING
        RETURNING id`,
-      [row.externalTxnId ?? null, row.postedAtUtc, row.amountCents, row.descriptionRaw, row.sourceRef ?? null]
+      [row.externalTxnId ?? null, row.postedAtUtc, row.amountCents, row.descriptionRaw, row.sourceRef ?? null, isOutgoing]
     );
     if (inserted.rowCount === 0) {
       continue;
@@ -29,6 +32,17 @@ export async function processBankRows(client: PoolClient, rows: ProcessBankRowIn
 
     posted += 1;
     const bankTransactionId = inserted.rows[0]!.id;
+
+    // Outgoing transactions skip player matching — go straight to recon queue
+    if (isOutgoing) {
+      await client.query(
+        `INSERT INTO reconciliation_queue (item_type, source_record_id, payload, suggested_player_id, confidence, reason)
+         VALUES ('bank_transaction', $1, $2::jsonb, NULL, 0, 'outgoing_transaction')`,
+        [bankTransactionId, JSON.stringify(row)]
+      );
+      queued += 1;
+      continue;
+    }
 
     // Tag-first matching: try each tag before falling back to description
     let match = { matched: false, playerId: null as string | null, confidence: 0, reason: "no_match" } as ReturnType<typeof matchPlayerByAlias>;

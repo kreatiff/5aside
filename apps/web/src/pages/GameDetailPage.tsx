@@ -35,6 +35,7 @@ type GameDetails = {
   status: string;
   source: string;
   feeCents: number;
+  venueFeeCents: number | null;
   facebookEventUrl?: string | null;
   attendance: AttendanceRecord[];
 };
@@ -97,6 +98,8 @@ export const GameDetailPage = () => {
   const { addToast } = useToast();
   const [isEditingFee, setIsEditingFee] = useState(false);
   const [feeInput, setFeeInput] = useState("");
+  const [isEditingVenueFee, setIsEditingVenueFee] = useState(false);
+  const [venueFeeInput, setVenueFeeInput] = useState("");
   const [importText, setImportText] = useState("");
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [addPlayerId, setAddPlayerId] = useState("");
@@ -135,13 +138,14 @@ export const GameDetailPage = () => {
   });
 
   const updateGameMutation = useMutation({
-    mutationFn: async (updates: { feeCents?: number; status?: string }) => {
+    mutationFn: async (updates: { feeCents?: number; venueFeeCents?: number; status?: string }) => {
       await api.patch(`/games/${id}`, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["games", id] });
       queryClient.invalidateQueries({ queryKey: ["games"] });
       setIsEditingFee(false);
+      setIsEditingVenueFee(false);
     },
   });
 
@@ -225,6 +229,13 @@ export const GameDetailPage = () => {
     const newFee = Number(feeInput);
     if (!isNaN(newFee)) {
       updateGameMutation.mutate({ feeCents: newFee });
+    }
+  };
+
+  const handleSaveVenueFee = () => {
+    const newFee = Number(venueFeeInput);
+    if (!isNaN(newFee) && newFee > 0) {
+      updateGameMutation.mutate({ venueFeeCents: newFee });
     }
   };
 
@@ -489,6 +500,47 @@ export const GameDetailPage = () => {
               <XCircle size={16} /> Cancel Game
             </button>
           )}
+
+          {/* Venue Fee */}
+          <div style={{ borderTop: "1px solid var(--border-color)", marginTop: "var(--spacing-md)", paddingTop: "var(--spacing-md)" }}>
+            <span className="text-muted text-sm">Venue Fee</span>
+            {isEditingVenueFee ? (
+              <div className="flex-between gap-sm mt-xs">
+                <div className="input-group">
+                  <span className="input-group__prefix">$</span>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={venueFeeInput}
+                    onChange={(e) => setVenueFeeInput(e.target.value)}
+                  />
+                </div>
+                <button className="btn btn-primary btn-sm" onClick={handleSaveVenueFee}>
+                  <Save size={16} /> Save
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => setIsEditingVenueFee(false)}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex-between mt-xs">
+                {game.venueFeeCents != null ? (
+                  <CurrencyDisplay cents={game.venueFeeCents} size="md" colorCode={false} />
+                ) : (
+                  <span className="text-muted">N/A</span>
+                )}
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setVenueFeeInput((game.venueFeeCents ?? 0).toString());
+                    setIsEditingVenueFee(true);
+                  }}
+                >
+                  <Edit2 size={14} />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Import Facebook Poll Card */}

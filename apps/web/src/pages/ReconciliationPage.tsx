@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { Check, X, Search, RefreshCw, CheckCircle } from "lucide-react";
+import { Check, X, Search, RefreshCw, CheckCircle, Building2, Package } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { DataTable, type Column } from "../components/DataTable";
@@ -52,15 +52,15 @@ export const ReconciliationPage = () => {
   });
 
   const resolveMutation = useMutation({
-    mutationFn: async ({ id, playerId }: { id: string; playerId: string }) => {
-      await api.post(`/reconciliation-queue/${id}/resolve`, { playerId });
+    mutationFn: async ({ id, payload }: { id: string; payload: { playerId: string } | { venueCategory: string } }) => {
+      await api.post(`/reconciliation-queue/${id}/resolve`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["players"] });
       queryClient.invalidateQueries({ queryKey: ["games"] });
-      addToast("success", "Item resolved and ledger updated.");
+      addToast("success", "Item resolved.");
     },
   });
 
@@ -220,7 +220,7 @@ export const ReconciliationPage = () => {
                     if (e.target.value) {
                       resolveMutation.mutate({
                         id: item.id,
-                        playerId: e.target.value,
+                        payload: { playerId: e.target.value },
                       });
                       setResolvingId(null);
                     }
@@ -254,7 +254,7 @@ export const ReconciliationPage = () => {
                   onClick={() =>
                     resolveMutation.mutate({
                       id: item.id,
-                      playerId: item.suggestedPlayerId!,
+                      payload: { playerId: item.suggestedPlayerId! },
                     })
                   }
                   title="Accept Suggestion"
@@ -268,6 +268,34 @@ export const ReconciliationPage = () => {
               >
                 <Search size={16} /> Find
               </button>
+              {item.itemType === "bank_transaction" && (
+                <>
+                  <button
+                    className="btn btn-outline btn-sm"
+                    onClick={() =>
+                      resolveMutation.mutate({
+                        id: item.id,
+                        payload: { venueCategory: "game_fees" },
+                      })
+                    }
+                    title="Assign as Game Fees"
+                  >
+                    <Building2 size={16} /> Game Fees
+                  </button>
+                  <button
+                    className="btn btn-outline btn-sm"
+                    onClick={() =>
+                      resolveMutation.mutate({
+                        id: item.id,
+                        payload: { venueCategory: "equipment" },
+                      })
+                    }
+                    title="Assign as Equipment"
+                  >
+                    <Package size={16} /> Equipment
+                  </button>
+                </>
+              )}
               <button
                 className="btn btn-ghost btn-icon btn-danger"
                 onClick={() => dismissMutation.mutate(item.id)}

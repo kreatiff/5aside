@@ -133,6 +133,31 @@ export async function reconciliationRoutes(app: FastifyInstance) {
       }
 
       const item = queueItem.rows[0]!;
+
+      // Resolve as venue expense (game_fees / equipment)
+      if ("venueCategory" in body) {
+        if (item.item_type !== "bank_transaction") {
+          throw app.httpErrors.badRequest("Venue categories can only be assigned to bank transactions");
+        }
+
+        await client.query(
+          `UPDATE bank_transactions SET venue_category = $1, updated_at = NOW() WHERE id = $2`,
+          [body.venueCategory, item.source_record_id]
+        );
+
+        await client.query(
+          `UPDATE reconciliation_queue
+           SET status = 'resolved',
+               resolved_by = $1,
+               resolved_at = NOW()
+           WHERE id = $2`,
+          [adminId, queueId]
+        );
+
+        return { resolved: true };
+      }
+
+      // Resolve as player assignment (existing logic)
       if (item.item_type === "attendance") {
         const payload = item.payload ?? {};
         const sourceStatus = String(payload.sourceStatus ?? "unknown");

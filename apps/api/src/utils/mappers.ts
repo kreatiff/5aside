@@ -15,6 +15,7 @@ export type GameRow = {
   game_date: Date | string;
   kickoff_at_utc: Date | string | null;
   fee_cents: number;
+  venue_fee_cents: number | null;
   source: string;
   status: string;
   created_at: Date | string;
@@ -54,6 +55,7 @@ export function mapGame(row: GameRow) {
     gameDate: toDateString(row.game_date),
     kickoffAtUtc: toIso(row.kickoff_at_utc),
     feeCents: row.fee_cents,
+    venueFeeCents: row.venue_fee_cents,
     source: row.source,
     status: row.status,
     createdAt: toIso(row.created_at)!,
