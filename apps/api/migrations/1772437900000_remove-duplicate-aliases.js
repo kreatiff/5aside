@@ -12,9 +12,9 @@ export const up = (pgm) => {
   pgm.sql(`
     DELETE FROM player_aliases
     WHERE id NOT IN (
-      SELECT DISTINCT ON (player_id, alias_raw) id
+      SELECT DISTINCT ON (player_id, source, alias_normalized) id
       FROM player_aliases
-      ORDER BY player_id, alias_raw, created_at ASC
+      ORDER BY player_id, source, alias_normalized, created_at ASC
     );
   `);
 };

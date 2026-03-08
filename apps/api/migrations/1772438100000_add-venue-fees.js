@@ -4,14 +4,14 @@ export const shorthands = undefined;
 export function up(pgm) {
   pgm.sql(`
     -- Settings: global venue game fee default ($150)
-    ALTER TABLE settings ADD COLUMN venue_game_fee_cents INTEGER NOT NULL DEFAULT 15000;
+    ALTER TABLE settings ADD COLUMN IF NOT EXISTS venue_game_fee_cents INTEGER NOT NULL DEFAULT 15000;
 
     -- Games: per-game venue fee (nullable = pre-tracking, always editable)
-    ALTER TABLE games ADD COLUMN venue_fee_cents INTEGER DEFAULT NULL;
+    ALTER TABLE games ADD COLUMN IF NOT EXISTS venue_fee_cents INTEGER DEFAULT NULL;
 
     -- Bank transactions: support outgoing + venue categorization
-    ALTER TABLE bank_transactions ADD COLUMN is_outgoing BOOLEAN NOT NULL DEFAULT FALSE;
-    ALTER TABLE bank_transactions ADD COLUMN venue_category TEXT DEFAULT NULL
+    ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS is_outgoing BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE bank_transactions ADD COLUMN IF NOT EXISTS venue_category TEXT DEFAULT NULL
       CHECK (venue_category IN ('game_fees', 'equipment'));
   `);
 }

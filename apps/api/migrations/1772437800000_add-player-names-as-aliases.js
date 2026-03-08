@@ -15,7 +15,7 @@ export const up = (pgm) => {
       id,
       'system',
       display_name,
-      LOWER(REGEXP_REPLACE(display_name, '[^a-z0-9]', '', 'g'))
+      LOWER(REGEXP_REPLACE(display_name, '[^a-zA-Z0-9]', '', 'g'))
     FROM players
     WHERE NOT EXISTS (
       SELECT 1 FROM player_aliases pa

@@ -9,7 +9,11 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
-  const defaultFee = process.env.DEFAULT_GAME_FEE_CENTS || 1000;
+  const raw = process.env.DEFAULT_GAME_FEE_CENTS;
+  const defaultFee = raw !== undefined ? parseInt(raw, 10) : 1000;
+  if (!Number.isInteger(defaultFee) || defaultFee <= 0) {
+    throw new Error(`Invalid DEFAULT_GAME_FEE_CENTS: ${raw}`);
+  }
   pgm.sql(`
     UPDATE settings
     SET current_game_fee_cents = ${defaultFee}, updated_at = NOW()

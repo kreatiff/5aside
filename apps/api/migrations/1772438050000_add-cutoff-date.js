@@ -2,7 +2,7 @@
 export const shorthands = undefined;
 
 export const up = (pgm) => {
-  pgm.sql(`ALTER TABLE settings ADD COLUMN cutoff_date DATE DEFAULT NULL`);
+  pgm.sql(`ALTER TABLE settings ADD COLUMN IF NOT EXISTS cutoff_date DATE DEFAULT NULL`);
 };
 
 export const down = (pgm) => {

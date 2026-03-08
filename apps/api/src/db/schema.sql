@@ -1,3 +1,7 @@
+-- Full schema reflecting all applied migrations.
+-- Used by db:init to bootstrap a fresh database.
+-- Keep this in sync with apps/api/migrations/*.js
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS admins (
@@ -39,11 +43,14 @@ CREATE TABLE IF NOT EXISTS player_aliases (
   UNIQUE(player_id, source, alias_normalized)
 );
 
+-- singleton row; cutoff_date and venue_game_fee_cents added by later migrations
 CREATE TABLE IF NOT EXISTS settings (
   id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   current_game_fee_cents INTEGER NOT NULL,
   app_timezone TEXT NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  cutoff_date DATE DEFAULT NULL,
+  venue_game_fee_cents INTEGER NOT NULL DEFAULT 15000
 );
 
 CREATE TABLE IF NOT EXISTS fee_change_log (
@@ -54,6 +61,7 @@ CREATE TABLE IF NOT EXISTS fee_change_log (
   changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- facebook_event_url and venue_fee_cents added by later migrations
 CREATE TABLE IF NOT EXISTS games (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   external_event_id TEXT,
@@ -62,9 +70,14 @@ CREATE TABLE IF NOT EXISTS games (
   fee_cents INTEGER NOT NULL,
   source TEXT NOT NULL,
   status TEXT NOT NULL,
+  facebook_event_url TEXT,
+  venue_fee_cents INTEGER DEFAULT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_games_facebook_event_url
+  ON games(facebook_event_url) WHERE facebook_event_url IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS attendance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -78,6 +91,7 @@ CREATE TABLE IF NOT EXISTS attendance (
   CONSTRAINT uq_attendance_game_player UNIQUE (game_id, player_id)
 );
 
+-- updated_at, is_outgoing, venue_category added by later migrations
 CREATE TABLE IF NOT EXISTS bank_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   external_txn_id TEXT,
@@ -85,7 +99,10 @@ CREATE TABLE IF NOT EXISTS bank_transactions (
   amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
   description_raw TEXT NOT NULL,
   source_ref TEXT,
+  is_outgoing BOOLEAN NOT NULL DEFAULT FALSE,
+  venue_category TEXT DEFAULT NULL CHECK (venue_category IN ('game_fees', 'equipment')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(external_txn_id)
 );
 
@@ -113,6 +130,7 @@ CREATE TABLE IF NOT EXISTS imports (
   error_summary TEXT
 );
 
+-- created_at added here (was added by migration 1772369087602)
 CREATE TABLE IF NOT EXISTS reconciliation_queue (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   item_type TEXT NOT NULL CHECK (item_type IN ('attendance', 'bank_transaction')),
@@ -132,5 +150,5 @@ CREATE INDEX IF NOT EXISTS idx_recon_status ON reconciliation_queue(status);
 CREATE INDEX IF NOT EXISTS idx_ledger_player ON ledger_entries(player_id);
 
 INSERT INTO settings (id, current_game_fee_cents, app_timezone)
-VALUES (1, 1000, 'America/New_York')
+VALUES (1, 1000, 'Australia/Brisbane')
 ON CONFLICT (id) DO NOTHING;
