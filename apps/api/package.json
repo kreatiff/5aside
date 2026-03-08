@@ -12,7 +12,7 @@
     "typecheck": "npm run build -w @fiveaside/contracts && npm run build -w @fiveaside/recon && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "db:migrate": "node-pg-migrate up",
-    "db:migrate:create": "node-pg-migrate create",
+    "db:migrate:create": "node-pg-migrate create --template-file-name src/scripts/migration-template.js",
     "db:create-admin": "tsx src/scripts/create-admin.ts",
     "db:seed": "tsx src/scripts/seed.ts"
   },
