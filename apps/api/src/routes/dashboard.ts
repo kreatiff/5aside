@@ -95,6 +95,8 @@ export async function dashboardRoutes(app: FastifyInstance) {
        FROM games g
        LEFT JOIN attendance a ON a.game_id = g.id
        WHERE ($1::date IS NULL OR g.game_date >= $1)
+         AND g.game_date <= CURRENT_DATE
+         AND g.status NOT IN ('scheduled', 'cancelled')
        GROUP BY g.id, g.game_date, g.kickoff_at_utc
        ORDER BY g.game_date DESC, g.kickoff_at_utc DESC NULLS LAST
        LIMIT $2`,
