@@ -451,6 +451,7 @@ export async function playerRoutes(app: FastifyInstance) {
           playerId: id,
           amountCents: Math.abs(entry.amount_cents),
           createdAt: entry.created_at.toISOString(),
+          gameId: entry.game_id,
         });
       } else if (entry.type === "adjustment") {
         if (entry.amount_cents < 0) {
@@ -458,6 +459,7 @@ export async function playerRoutes(app: FastifyInstance) {
             playerId: id,
             amountCents: Math.abs(entry.amount_cents),
             createdAt: entry.created_at.toISOString(),
+            gameId: entry.game_id,
           });
         } else if (entry.amount_cents > 0) {
           charges.push({

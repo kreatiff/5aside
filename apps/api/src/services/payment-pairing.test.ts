@@ -22,10 +22,12 @@ const makePayment = (
   amountCents: number,
   createdAt: string,
   playerId = "player-1",
+  gameId?: string | null,
 ): PaymentEntry => ({
   playerId,
   amountCents,
   createdAt,
+  gameId: gameId ?? null,
 });
 
 describe("pairPaymentsToCharges", () => {
@@ -161,5 +163,102 @@ describe("pairPaymentsToCharges", () => {
     const result = pairPaymentsToCharges(charges, payments);
 
     expect(result[0]!.playerId).toBe("player-42");
+  });
+
+  // ── Linked (game-targeted) payment tests ──
+
+  it("applies linked cash payment to the target game, not the oldest", () => {
+    const charges = [
+      makeCharge("g1", 1000, "2026-03-01"),
+      makeCharge("g2", 1000, "2026-03-08"),
+    ];
+    // Payment linked to g2 — should pay g2 even though g1 is older
+    const payments = [makePayment(1000, "2026-03-09", "player-1", "g2")];
+    const result = pairPaymentsToCharges(charges, payments);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ gameId: "g1", status: "unpaid", paidCents: 0 });
+    expect(result[1]).toMatchObject({ gameId: "g2", status: "paid", paidCents: 1000 });
+  });
+
+  it("linked payment excess flows into FIFO pool for older games", () => {
+    const charges = [
+      makeCharge("g1", 1000, "2026-03-01"),
+      makeCharge("g2", 1000, "2026-03-08"),
+    ];
+    // Linked to g2 but overpays — excess should cover g1 via FIFO
+    const payments = [makePayment(2000, "2026-03-09", "player-1", "g2")];
+    const result = pairPaymentsToCharges(charges, payments);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ gameId: "g1", status: "paid", paidCents: 1000 });
+    expect(result[1]).toMatchObject({ gameId: "g2", status: "paid", paidCents: 1000 });
+  });
+
+  it("mix of linked and unlinked payments", () => {
+    const charges = [
+      makeCharge("g1", 1000, "2026-03-01"),
+      makeCharge("g2", 1000, "2026-03-08"),
+      makeCharge("g3", 1000, "2026-03-15"),
+    ];
+    // Unlinked payment of 1000 + linked payment to g3
+    const payments = [
+      makePayment(1000, "2026-03-02"),        // unlinked — should FIFO to g1
+      makePayment(1000, "2026-03-16", "player-1", "g3"),  // linked to g3
+    ];
+    const result = pairPaymentsToCharges(charges, payments);
+
+    expect(result).toHaveLength(3);
+    expect(result[0]).toMatchObject({ gameId: "g1", status: "paid", paidCents: 1000 });
+    expect(result[1]).toMatchObject({ gameId: "g2", status: "unpaid", paidCents: 0 });
+    expect(result[2]).toMatchObject({ gameId: "g3", status: "paid", paidCents: 1000 });
+  });
+
+  it("linked payment to a game with no matching charge goes to FIFO pool", () => {
+    const charges = [
+      makeCharge("g1", 1000, "2026-03-01"),
+    ];
+    // Linked to g999 which doesn't exist in charges — should flow to FIFO
+    const payments = [makePayment(1000, "2026-03-02", "player-1", "g999")];
+    const result = pairPaymentsToCharges(charges, payments);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ gameId: "g1", status: "paid", paidCents: 1000 });
+  });
+
+  it("multiple linked payments to the same game accumulate", () => {
+    const charges = [
+      makeCharge("g1", 1000, "2026-03-01"),
+      makeCharge("g2", 1000, "2026-03-08"),
+    ];
+    // Two partial linked payments to g2
+    const payments = [
+      makePayment(400, "2026-03-09", "player-1", "g2"),
+      makePayment(600, "2026-03-10", "player-1", "g2"),
+    ];
+    const result = pairPaymentsToCharges(charges, payments);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ gameId: "g1", status: "unpaid", paidCents: 0 });
+    expect(result[1]).toMatchObject({ gameId: "g2", status: "paid", paidCents: 1000 });
+  });
+
+  it("linked payment partially covering charge + FIFO unlinked fills the rest", () => {
+    const charges = [
+      makeCharge("g1", 1000, "2026-03-01"),
+      makeCharge("g2", 1000, "2026-03-08"),
+    ];
+    const payments = [
+      makePayment(500, "2026-03-09", "player-1", "g2"),  // linked partial for g2
+      makePayment(1500, "2026-03-01"),                     // unlinked — FIFO
+    ];
+    // Linked: g2 gets 500 directly
+    // FIFO pool: 1500 unlinked
+    // FIFO walk: g1 needs 1000, consumes 1000 → paid. g2 needs 500 more, consumes 500 → paid.
+    const result = pairPaymentsToCharges(charges, payments);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ gameId: "g1", status: "paid", paidCents: 1000 });
+    expect(result[1]).toMatchObject({ gameId: "g2", status: "paid", paidCents: 1000 });
   });
 });
