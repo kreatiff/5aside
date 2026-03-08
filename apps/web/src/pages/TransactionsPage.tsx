@@ -1,11 +1,12 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { Banknote } from "lucide-react";
+import { Banknote, RefreshCw } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { DataTable, type Column } from "../components/DataTable";
+import { Modal } from "../components/Modal";
 import { formatCurrency, formatDate } from "../utils/format";
 
 type BankTransaction = {
@@ -21,6 +22,12 @@ type BankTransaction = {
 };
 
 export const TransactionsPage = () => {
+  const queryClient = useQueryClient();
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ["bank-transactions"],
     queryFn: async () => {
@@ -33,6 +40,39 @@ export const TransactionsPage = () => {
     () => data?.data ?? [],
     [data],
   );
+
+  const handleSync = async () => {
+    setIsSyncModalOpen(true);
+    setIsSyncing(true);
+    setSyncResult(null);
+    setSyncError(null);
+
+    try {
+      const response = await fetch(
+        "https://n8n.dominus.casa/webhook/184c96e2-1179-4c20-bf2f-9291b6fa3c15",
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`Sync failed with status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setSyncResult(result);
+      queryClient.invalidateQueries({ queryKey: ["bank-transactions"] });
+      // Also invalidate summary/player data since bank transactions might affect ledgers
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+    } catch (error: any) {
+      setSyncError(error.message || "An unknown error occurred during sync");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const columns: Column<BankTransaction>[] = useMemo(
     () => [
@@ -121,6 +161,16 @@ export const TransactionsPage = () => {
       <PageHeader
         title="Bank Transactions"
         description="All imported bank transactions and their matched players."
+        actions={
+          <button className="btn btn-primary" onClick={handleSync}>
+            <RefreshCw
+              size={16}
+              className={isSyncing ? "spin-animation" : ""}
+              style={{ marginRight: "0.5rem" }}
+            />
+            Sync from Bank
+          </button>
+        }
       />
 
       <DataTable<BankTransaction>
@@ -132,6 +182,88 @@ export const TransactionsPage = () => {
         emptyTitle="No transactions yet"
         emptyDescription="Import bank transactions via CSV or the Pocketsmith webhook."
       />
+
+      <Modal
+        isOpen={isSyncModalOpen}
+        onClose={() => !isSyncing && setIsSyncModalOpen(false)}
+        title="Syncing Bank Transactions"
+        size="md"
+        footer={
+          <button
+            className="btn btn-primary"
+            onClick={() => setIsSyncModalOpen(false)}
+            disabled={isSyncing}
+          >
+            {isSyncing ? "Please wait..." : "Close"}
+          </button>
+        }
+      >
+        <div className="flex-col gap-md">
+          {isSyncing && (
+            <div className="flex-align gap-sm justify-center py-lg text-primary">
+              <RefreshCw size={24} className="spin-animation" />
+              <span>Fetching latest transactions from bank...</span>
+            </div>
+          )}
+
+          {!isSyncing && syncError && (
+            <div
+              className="toast toast-error mb-0 w-full"
+              style={{ position: "relative", transform: "none", opacity: 1 }}
+            >
+              <p>
+                <strong>Sync failed:</strong> {syncError}
+              </p>
+            </div>
+          )}
+
+          {!isSyncing && syncResult && (
+            <div className="flex-col gap-sm">
+              <div
+                className="toast toast-success mb-0 w-full"
+                style={{
+                  position: "relative",
+                  transform: "none",
+                  opacity: 1,
+                  marginBottom: "1rem",
+                }}
+              >
+                <p>
+                  <strong>Sync completed successfully.</strong>
+                </p>
+              </div>
+              <h4 className="m-0">Summary</h4>
+              <div className="card p-sm bg-neutral">
+                <pre
+                  className="text-sm m-0"
+                  style={{ whiteSpace: "pre-wrap", overflowX: "auto" }}
+                >
+                  {JSON.stringify(syncResult, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <style>{`
+        .spin-animation {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          100% { transform: rotate(360deg); }
+        }
+        .justify-center {
+          justify-content: center;
+        }
+        .py-lg {
+          padding-top: var(--spacing-lg);
+          padding-bottom: var(--spacing-lg);
+        }
+        .w-full {
+          width: 100%;
+        }
+      `}</style>
     </>
   );
 };

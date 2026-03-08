@@ -50,6 +50,7 @@ type LedgerEntry = {
   adjustment_reason?: string | null;
   game_date?: string | null;
   bank_posted_at?: string | null;
+  bank_description?: string | null;
   paymentStatus?: "paid" | "partial" | "unpaid";
   outstandingCents?: number;
   isManualPayment?: boolean;
@@ -65,6 +66,7 @@ function ledgerTypeBadgeVariant(
 
 function ledgerDetails(entry: LedgerEntry): string {
   if (entry.type === "charge") return "Game fee";
+  if (entry.bank_description) return entry.bank_description;
   if (entry.adjustment_reason) return entry.adjustment_reason;
   if (entry.type === "payment") return "Bank deposit";
   return "";

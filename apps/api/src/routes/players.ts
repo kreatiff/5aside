@@ -397,11 +397,13 @@ export async function playerRoutes(app: FastifyInstance) {
       game_date: string | null;
       bank_posted_at: string | null;
       adjustment_reason: string | null;
+      bank_description: string | null;
     }>(
       `SELECT le.id, le.player_id, le.type, le.amount_cents, le.created_at, le.adjustment_reason,
               le.game_id, le.bank_transaction_id,
               g.game_date::text AS game_date,
-              bt.posted_at_utc::text AS bank_posted_at
+              bt.posted_at_utc::text AS bank_posted_at,
+              bt.description_raw AS bank_description
        FROM ledger_entries le
        LEFT JOIN games g ON g.id = le.game_id
        LEFT JOIN bank_transactions bt ON bt.id = le.bank_transaction_id
