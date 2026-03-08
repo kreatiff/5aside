@@ -13,6 +13,7 @@ import { ImportsPage } from "./pages/ImportsPage";
 import { ReconciliationPage } from "./pages/ReconciliationPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TransactionsPage } from "./pages/TransactionsPage";
+import { PaymentMatrixPage } from "./pages/PaymentMatrixPage";
 
 // eslint-disable-next-line react-refresh/only-export-components
 const ProtectedRoute = () => {
@@ -71,6 +72,7 @@ export const router = createBrowserRouter([
       { path: "/players/:id", element: <PlayerDetailPage /> },
       { path: "/games", element: <GamesPage /> },
       { path: "/games/:id", element: <GameDetailPage /> },
+      { path: "/payments", element: <PaymentMatrixPage /> },
       { path: "/imports", element: <ImportsPage /> },
       { path: "/transactions", element: <TransactionsPage /> },
       { path: "/reconciliation", element: <ReconciliationPage /> },

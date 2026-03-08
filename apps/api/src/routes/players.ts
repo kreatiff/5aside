@@ -7,6 +7,8 @@ import { mapPlayer, type PlayerRow } from "../utils/mappers.js";
 import { parseBody, parseUuidParam } from "../utils/request.js";
 import { pool } from "../db/pool.js";
 import { z } from "zod";
+import { insertLedgerEntry } from "../services/ledger.js";
+import { pairPaymentsToCharges, type ChargeEntry, type PaymentEntry } from "../services/payment-pairing.js";
 
 export async function playerRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
@@ -261,15 +263,117 @@ export async function playerRoutes(app: FastifyInstance) {
     return { deleted: true };
   });
 
+  app.post("/api/players/:id/manual-payment", async (request, reply) => {
+    const id = parseUuidParam(request, reply, "id");
+    const bodySchema = z.object({
+      amountCents: z.number().int().positive(),
+      gameId: z.string().uuid().optional()
+    });
+    const body = parseBody(reply, bodySchema, request.body);
+
+    const result = await withTransaction(async (client) => {
+      let createdAt: Date | undefined;
+
+      if (body.gameId) {
+        const gameRes = await client.query<{ game_date: string }>(
+          `SELECT game_date::text FROM games WHERE id = $1`,
+          [body.gameId]
+        );
+        if (gameRes.rowCount > 0 && gameRes.rows[0]?.game_date) {
+          const d = new Date(gameRes.rows[0].game_date);
+          d.setDate(d.getDate() + 1); // 1 day after the game
+          createdAt = d;
+        }
+      }
+
+      const amountCents = -Math.abs(body.amountCents); // Payments are stored as negative amounts
+
+      const entryId = await insertLedgerEntry(client, {
+        playerId: id,
+        type: "payment",
+        amountCents,
+        gameId: body.gameId ?? null,
+        adjustmentReason: "Cash payment",
+        createdAt
+      });
+
+      return { id: entryId };
+    });
+
+    reply.code(201);
+    return { id: result.id, amountCents: body.amountCents, gameId: body.gameId };
+  });
+
+  app.delete("/api/players/:id/manual-payment/:entryId", async (request, reply) => {
+    const playerId = parseUuidParam(request, reply, "id");
+    const entryId = parseUuidParam(request, reply, "entryId");
+
+    await withTransaction(async (client) => {
+      // Find the entry and validate it's a manual payment
+      const entryResult = await client.query<{ amount_cents: number; game_id: string | null; created_at: string }>(
+        `SELECT amount_cents, game_id, created_at::text AS created_at 
+         FROM ledger_entries 
+         WHERE id = $1 AND player_id = $2 
+           AND type = 'payment' 
+           AND adjustment_reason = 'Cash payment' 
+           AND bank_transaction_id IS NULL`,
+        [entryId, playerId]
+      );
+
+      if (entryResult.rowCount === 0) {
+        throw reply.forbidden("Entry not found or is not a manual cash payment");
+      }
+
+      const entry = entryResult.rows[0]!;
+
+      // Delete it
+      await client.query(`DELETE FROM ledger_entries WHERE id = $1`, [entryId]);
+
+      // Reverse the balance if it was applied (on/after cutoff)
+      let effectiveDate: string | null = null;
+      if (entry.game_id) {
+        const gameResult = await client.query<{ game_date: string }>(
+          `SELECT game_date::text FROM games WHERE id = $1`, 
+          [entry.game_id]
+        );
+        effectiveDate = gameResult.rows[0]?.game_date?.slice(0, 10) ?? null;
+      }
+      if (!effectiveDate) {
+        effectiveDate = entry.created_at.slice(0, 10);
+      }
+
+      const settings = await client.query<{ cutoff_date: string | null }>(
+        `SELECT cutoff_date::text FROM settings WHERE id = 1`
+      );
+      const cutoffDate = settings.rows[0]?.cutoff_date?.slice(0, 10) ?? null;
+
+      const isAfterCutoff = !cutoffDate || effectiveDate >= cutoffDate;
+
+      if (isAfterCutoff) {
+        // Reverse balance update. `amount_cents` is negative, so subtracting it increases the balance.
+        await client.query(
+          `UPDATE players 
+           SET current_balance_cents = current_balance_cents - $1, updated_at = NOW() 
+           WHERE id = $2`,
+          [entry.amount_cents, playerId]
+        );
+      }
+    });
+
+    return { deleted: true };
+  });
+
   app.get("/api/players/:id/ledger", async (request, reply) => {
     const id = parseUuidParam(request, reply, "id");
     const limit = Number((request.query as any).limit) || 50;
     const offset = Number((request.query as any).offset) || 0;
+    const showAll = (request.query as any).showAll === "true";
 
     const cutoffResult = await query<{ cutoff_date: string | null }>(
       `SELECT cutoff_date::text FROM settings WHERE id = 1`
     );
-    const cutoff = cutoffResult.rows[0]?.cutoff_date?.slice(0, 10) ?? null;
+    const rawCutoff = cutoffResult.rows[0]?.cutoff_date?.slice(0, 10) ?? null;
+    const cutoff = showAll ? null : rawCutoff;
 
     const countResult = await query<{ count: string }>(
       `SELECT COUNT(*)::text AS count
@@ -288,11 +392,14 @@ export async function playerRoutes(app: FastifyInstance) {
       type: string;
       amount_cents: number;
       created_at: Date;
+      game_id: string | null;
+      bank_transaction_id: string | null;
       game_date: string | null;
       bank_posted_at: string | null;
       adjustment_reason: string | null;
     }>(
       `SELECT le.id, le.player_id, le.type, le.amount_cents, le.created_at, le.adjustment_reason,
+              le.game_id, le.bank_transaction_id,
               g.game_date::text AS game_date,
               bt.posted_at_utc::text AS bank_posted_at
        FROM ledger_entries le
@@ -305,8 +412,88 @@ export async function playerRoutes(app: FastifyInstance) {
       [id, cutoff, limit, offset]
     );
 
+    // Fetch all entries for pairings
+    const allEntriesResult = await query<{
+      id: string;
+      type: string;
+      amount_cents: number;
+      game_id: string | null;
+      attendance_id: string | null;
+      created_at: Date;
+      game_date: string | null;
+    }>(
+      `SELECT le.id, le.type, le.amount_cents, le.game_id, le.attendance_id, le.created_at,
+              g.game_date::text AS game_date
+       FROM ledger_entries le
+       LEFT JOIN games g ON g.id = le.game_id
+       WHERE le.player_id = $1
+         AND ($2::date IS NULL OR COALESCE(g.game_date, le.created_at::date) >= $2)
+       ORDER BY le.created_at ASC`,
+      [id, cutoff]
+    );
+
+    const charges: ChargeEntry[] = [];
+    const payments: PaymentEntry[] = [];
+
+    for (const entry of allEntriesResult.rows) {
+      if (entry.type === "charge" && entry.game_id && entry.game_date) {
+        charges.push({
+          gameId: entry.game_id,
+          attendanceId: entry.attendance_id ?? "",
+          playerId: id,
+          amountCents: entry.amount_cents,
+          gameDate: entry.game_date,
+        });
+      } else if (entry.type === "payment") {
+        payments.push({
+          playerId: id,
+          amountCents: Math.abs(entry.amount_cents),
+          createdAt: entry.created_at.toISOString(),
+        });
+      } else if (entry.type === "adjustment") {
+        if (entry.amount_cents < 0) {
+          payments.push({
+            playerId: id,
+            amountCents: Math.abs(entry.amount_cents),
+            createdAt: entry.created_at.toISOString(),
+          });
+        } else if (entry.amount_cents > 0) {
+          charges.push({
+            gameId: entry.game_id ?? "",
+            attendanceId: entry.attendance_id ?? "",
+            playerId: id,
+            amountCents: entry.amount_cents,
+            gameDate: entry.game_date ?? entry.created_at.toISOString().slice(0, 10),
+          });
+        }
+      }
+    }
+
+    const pairings = pairPaymentsToCharges(charges, payments);
+    const pairingMap = new Map(pairings.map((p) => [p.gameId, p]));
+
+    const enrichedRows = result.rows.map((row) => {
+      if (row.type === "charge" && row.game_id) {
+        const pairing = pairingMap.get(row.game_id);
+        const outstandingCents = pairing ? (pairing.chargeCents - pairing.paidCents) : row.amount_cents;
+        return {
+          ...row,
+          paymentStatus: pairing?.status ?? "unpaid",
+          outstandingCents,
+        };
+      }
+      if (row.type === "payment") {
+        const isManualPayment = row.adjustment_reason === 'Cash payment' && row.bank_transaction_id === null;
+        return {
+          ...row,
+          isManualPayment,
+        };
+      }
+      return row;
+    });
+
     return {
-      data: result.rows,
+      data: enrichedRows,
       total,
       limit,
       offset

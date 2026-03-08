@@ -9,6 +9,8 @@ import {
   X,
   ChevronDown,
   ChevronRight,
+  DollarSign,
+  Undo,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
@@ -43,9 +45,14 @@ type LedgerEntry = {
   created_at: string;
   type: string;
   amount_cents: number;
-  adjustment_reason?: string;
+  game_id?: string | null;
+  bank_transaction_id?: string | null;
+  adjustment_reason?: string | null;
   game_date?: string | null;
   bank_posted_at?: string | null;
+  paymentStatus?: "paid" | "partial" | "unpaid";
+  outstandingCents?: number;
+  isManualPayment?: boolean;
 };
 
 function ledgerTypeBadgeVariant(
@@ -58,8 +65,9 @@ function ledgerTypeBadgeVariant(
 
 function ledgerDetails(entry: LedgerEntry): string {
   if (entry.type === "charge") return "Game fee";
-  if (entry.type === "adjustment") return entry.adjustment_reason ?? "";
-  return "Bank deposit";
+  if (entry.adjustment_reason) return entry.adjustment_reason;
+  if (entry.type === "payment") return "Bank deposit";
+  return "";
 }
 
 export const PlayerDetailPage = () => {
@@ -75,6 +83,11 @@ export const PlayerDetailPage = () => {
   const [ledgerFilter, setLedgerFilter] = useState<
     "all" | "charge" | "payment"
   >("all");
+  const [confirmPaymentData, setConfirmPaymentData] = useState<{
+    amountCents: number;
+    gameId: string | null | undefined;
+  } | null>(null);
+  const [confirmUndoId, setConfirmUndoId] = useState<string | null>(null);
 
   const { data: allPlayers } = useQuery({
     queryKey: ["players-all"],
@@ -106,12 +119,25 @@ export const PlayerDetailPage = () => {
     },
   });
 
+  const [showAllLedger, setShowAllLedger] = useState(false);
+
   const { data: ledger, isLoading: loadingLedger } = useQuery({
     queryKey: ["players", id, "ledger"],
     queryFn: async () => {
       const { data } = await api.get(`/players/${id}/ledger?limit=10000`);
       return data;
     },
+  });
+
+  const { data: allLedger, isFetching: fetchingAllLedger } = useQuery({
+    queryKey: ["players", id, "ledger-all"],
+    queryFn: async () => {
+      const { data } = await api.get(
+        `/players/${id}/ledger?limit=100000&showAll=true`,
+      );
+      return data;
+    },
+    enabled: showAllLedger,
   });
 
   const { data: appSettings } = useQuery({
@@ -122,7 +148,8 @@ export const PlayerDetailPage = () => {
     },
   });
 
-  const cutoffDate = appSettings?.settings?.cutoffDate ?? appSettings?.cutoff_date ?? null;
+  const cutoffDate =
+    appSettings?.settings?.cutoffDate ?? appSettings?.cutoff_date ?? null;
 
   const addAliasMutation = useMutation({
     mutationFn: async ({
@@ -179,6 +206,36 @@ export const PlayerDetailPage = () => {
     },
   });
 
+  const manualPaymentMutation = useMutation({
+    mutationFn: async ({
+      amountCents,
+      gameId,
+    }: {
+      amountCents: number;
+      gameId?: string | null;
+    }) => {
+      await api.post(`/players/${id}/manual-payment`, { amountCents, gameId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["players", id] });
+      queryClient.invalidateQueries({ queryKey: ["players", id, "ledger"] });
+      queryClient.invalidateQueries({ queryKey: ["payment-matrix"] });
+      addToast("success", "Payment recorded successfully");
+    },
+  });
+
+  const deleteManualPaymentMutation = useMutation({
+    mutationFn: async (entryId: string) => {
+      await api.delete(`/players/${id}/manual-payment/${entryId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["players", id] });
+      queryClient.invalidateQueries({ queryKey: ["players", id, "ledger"] });
+      queryClient.invalidateQueries({ queryKey: ["payment-matrix"] });
+      addToast("success", "Payment removed");
+    },
+  });
+
   const submitAlias = () => {
     if (aliasInput.trim()) {
       addAliasMutation.mutate({
@@ -210,6 +267,9 @@ export const PlayerDetailPage = () => {
           if (entry.type === "payment" && entry.bank_posted_at) {
             return <span>{formatDate(entry.bank_posted_at)}</span>;
           }
+          if (entry.type === "payment" && entry.isManualPayment) {
+            return <span>{formatDate(entry.created_at)}</span>;
+          }
           return <span>{formatDateTime(entry.created_at)}</span>;
         },
       },
@@ -239,11 +299,59 @@ export const PlayerDetailPage = () => {
           <span className="text-muted">{ledgerDetails(entry)}</span>
         ),
       },
+      {
+        key: "actions",
+        header: "",
+        align: "right",
+        render: (entry) => {
+          if (
+            entry.type === "charge" &&
+            entry.paymentStatus &&
+            entry.paymentStatus !== "paid"
+          ) {
+            return (
+              <button
+                className="btn btn-sm btn-outline text-success"
+                onClick={() =>
+                  setConfirmPaymentData({
+                    amountCents: entry.outstandingCents ?? 0,
+                    gameId: entry.game_id,
+                  })
+                }
+                disabled={manualPaymentMutation.isPending}
+                title="Mark this game as paid with cash"
+                style={{ padding: "0.25rem 0.5rem", height: "auto" }}
+              >
+                <DollarSign size={14} style={{ marginRight: "0.25rem" }} /> Cash
+                Paid
+              </button>
+            );
+          }
+          if (entry.type === "payment" && entry.isManualPayment) {
+            return (
+              <button
+                className="btn btn-sm btn-ghost text-danger"
+                onClick={() => setConfirmUndoId(entry.id)}
+                disabled={deleteManualPaymentMutation.isPending}
+                title="Undo manual payment"
+                style={{ padding: "0.25rem 0.5rem", height: "auto" }}
+              >
+                <Undo size={14} style={{ marginRight: "0.25rem" }} /> Undo
+              </button>
+            );
+          }
+          return null;
+        },
+      },
     ],
     [],
   );
 
-  const ledgerData: LedgerEntry[] = (ledger?.data ?? []).filter(
+  const activeLedgerData: LedgerEntry[] = showAllLedger
+    ? (allLedger?.data ?? ledger?.data ?? [])
+    : (ledger?.data ?? []);
+
+  const ledgerData: LedgerEntry[] = activeLedgerData.filter(
     (e: LedgerEntry) => ledgerFilter === "all" || e.type === ledgerFilter,
   );
 
@@ -315,7 +423,10 @@ export const PlayerDetailPage = () => {
                 animated
               />
               {cutoffDate && (
-                <p className="text-muted text-sm" style={{ marginTop: "0.25rem" }}>
+                <p
+                  className="text-muted text-sm"
+                  style={{ marginTop: "0.25rem" }}
+                >
                   From {formatDate(cutoffDate)} onwards
                 </p>
               )}
@@ -582,6 +693,30 @@ export const PlayerDetailPage = () => {
           emptyTitle="No transactions yet"
           emptyDescription="Charges and payments will appear here once games are recorded."
         />
+
+        {/* Load All Transactions */}
+        {!showAllLedger ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "var(--spacing-md) 0 var(--spacing-sm)",
+            }}
+          >
+            <button
+              className="btn btn-ghost btn-sm text-muted"
+              onClick={() => setShowAllLedger(true)}
+            >
+              Load all transactions (including pre-cutoff)
+            </button>
+          </div>
+        ) : fetchingAllLedger ? (
+          <p
+            className="text-muted text-sm"
+            style={{ textAlign: "center", padding: "var(--spacing-sm)" }}
+          >
+            Loading...
+          </p>
+        ) : null}
       </div>
 
       <Modal
@@ -642,6 +777,89 @@ export const PlayerDetailPage = () => {
               attendance posts.
             </span>
           </div>
+        </div>
+      </Modal>
+      <Modal
+        isOpen={!!confirmPaymentData}
+        onClose={() => setConfirmPaymentData(null)}
+        title="Confirm Custom Payment"
+        footer={
+          <div className="flex gap-sm">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setConfirmPaymentData(null)}
+              disabled={manualPaymentMutation.isPending}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                if (confirmPaymentData) {
+                  manualPaymentMutation.mutate(confirmPaymentData, {
+                    onSuccess: () => setConfirmPaymentData(null),
+                  });
+                }
+              }}
+              disabled={manualPaymentMutation.isPending}
+            >
+              Record Payment
+            </button>
+          </div>
+        }
+      >
+        <p className="text-secondary">
+          Are you sure you want to record a cash payment of{" "}
+          <strong>
+            {confirmPaymentData
+              ? `$${(confirmPaymentData.amountCents / 100).toFixed(2)}`
+              : ""}
+          </strong>{" "}
+          for this game?
+        </p>
+      </Modal>
+
+      <Modal
+        isOpen={!!confirmUndoId}
+        onClose={() => setConfirmUndoId(null)}
+        title="Undo Manual Payment"
+        footer={
+          <div className="flex gap-sm">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setConfirmUndoId(null)}
+              disabled={deleteManualPaymentMutation.isPending}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => {
+                if (confirmUndoId) {
+                  deleteManualPaymentMutation.mutate(confirmUndoId, {
+                    onSuccess: () => setConfirmUndoId(null),
+                  });
+                }
+              }}
+              disabled={deleteManualPaymentMutation.isPending}
+            >
+              Undo Payment
+            </button>
+          </div>
+        }
+      >
+        <div className="flex-col gap-sm">
+          <p className="text-secondary">
+            Are you sure you want to undo this manual payment?
+          </p>
+          <p className="text-muted text-sm">
+            This will delete the ledger entry and appropriately adjust the
+            player's balance.
+          </p>
         </div>
       </Modal>
     </>

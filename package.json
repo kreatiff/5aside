@@ -14,6 +14,7 @@
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "watch:git-health": "pwsh -NoProfile -File scripts/watch-git-health.ps1",
     "db:init": "npm run db:init -w @fiveaside/api",
     "db:migrate": "npm run db:migrate -w @fiveaside/api",
     "db:create-admin": "npm run db:create-admin -w @fiveaside/api",

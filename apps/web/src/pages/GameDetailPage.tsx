@@ -11,13 +11,15 @@ import {
   XCircle,
   UserPlus,
   X,
+  DollarSign,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
+import { Modal } from "../components/Modal";
 import { StatusBadge } from "../components/StatusBadge";
 import { CurrencyDisplay } from "../components/CurrencyDisplay";
 import { DataTable, type Column } from "../components/DataTable";
 import { useToast } from "../contexts/ToastContext";
-import { formatDate } from "../utils/format";
+import { formatDate, formatCurrency } from "../utils/format";
 
 type AttendanceRecord = {
   id: string;
@@ -40,6 +42,27 @@ type GameDetails = {
 type Player = {
   id: string;
   displayName: string;
+};
+
+type PlayerPaymentStatus = {
+  playerId: string;
+  displayName: string;
+  chargeCents: number;
+  paidCents: number;
+  status: "paid" | "partial" | "unpaid";
+};
+
+type PaymentStatusResponse = {
+  gameId: string;
+  feeCents: number;
+  playerStatuses: PlayerPaymentStatus[];
+  summary: {
+    totalExpectedCents: number;
+    totalPaidCents: number;
+    paidCount: number;
+    partialCount: number;
+    unpaidCount: number;
+  };
 };
 
 const statusVariant = (status: string) => {
@@ -78,6 +101,11 @@ export const GameDetailPage = () => {
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [addPlayerId, setAddPlayerId] = useState("");
   const [addChargeable, setAddChargeable] = useState(true);
+  const [confirmPaymentData, setConfirmPaymentData] = useState<{
+    playerId: string;
+    amountCents: number;
+    displayName: string;
+  } | null>(null);
 
   const { data: game, isLoading } = useQuery({
     queryKey: ["games", id],
@@ -85,6 +113,17 @@ export const GameDetailPage = () => {
       const { data } = await api.get<{ game: GameDetails }>(`/games/${id}`);
       return data.game;
     },
+  });
+
+  const { data: paymentStatus } = useQuery({
+    queryKey: ["games", id, "payment-status"],
+    queryFn: async () => {
+      const { data } = await api.get<PaymentStatusResponse>(
+        `/games/${id}/payment-status`,
+      );
+      return data;
+    },
+    enabled: !!game,
   });
 
   const { data: players } = useQuery({
@@ -160,6 +199,28 @@ export const GameDetailPage = () => {
     },
   });
 
+  const manualPaymentMutation = useMutation({
+    mutationFn: async ({
+      playerId,
+      amountCents,
+    }: {
+      playerId: string;
+      amountCents: number;
+    }) => {
+      await api.post(`/players/${playerId}/manual-payment`, {
+        amountCents,
+        gameId: id,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["games", id, "payment-status"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["payment-matrix"] });
+      addToast("success", "Payment recorded successfully");
+    },
+  });
+
   const handleSaveFee = () => {
     const newFee = Number(feeInput);
     if (!isNaN(newFee)) {
@@ -221,22 +282,89 @@ export const GameDetailPage = () => {
         ),
       },
       {
-        key: "remove",
+        key: "paymentStatus",
+        header: "Payment",
+        align: "center",
+        render: (att) => {
+          if (!att.chargeable) return <span className="text-muted">—</span>;
+          const ps = paymentStatus?.playerStatuses?.find(
+            (p) => p.playerId === att.playerId,
+          );
+          if (!ps) return <span className="text-muted">…</span>;
+          const variant =
+            ps.status === "paid"
+              ? "success"
+              : ps.status === "partial"
+                ? "warning"
+                : "danger";
+          const label =
+            ps.status === "partial"
+              ? `${formatCurrency(ps.paidCents)}/${formatCurrency(ps.chargeCents)}`
+              : ps.status === "paid"
+                ? "Paid"
+                : "Unpaid";
+          return (
+            <StatusBadge variant={variant as any} dot>
+              {label}
+            </StatusBadge>
+          );
+        },
+      },
+      {
+        key: "actions",
         header: "",
         align: "right",
-        render: (att) => (
-          <button
-            className="btn btn-ghost btn-icon btn-danger"
-            title="Remove player from game"
-            onClick={() => removePlayerMutation.mutate(att.id)}
-            disabled={removePlayerMutation.isPending}
-          >
-            <X size={14} />
-          </button>
-        ),
+        render: (att) => {
+          const ps = paymentStatus?.playerStatuses?.find(
+            (p) => p.playerId === att.playerId,
+          );
+          const outstandingCents = ps ? ps.chargeCents - ps.paidCents : 0;
+          const showPayButton =
+            att.chargeable &&
+            ps &&
+            (ps.status === "unpaid" || ps.status === "partial");
+
+          return (
+            <div
+              className="flex-align justify-end gap-sm"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "var(--spacing-sm)",
+              }}
+            >
+              {showPayButton && (
+                <button
+                  className="btn btn-sm btn-outline text-success"
+                  style={{ padding: "0.25rem 0.5rem", height: "auto" }}
+                  title="Mark this game as paid with cash"
+                  disabled={manualPaymentMutation.isPending}
+                  onClick={() => {
+                    setConfirmPaymentData({
+                      playerId: att.playerId,
+                      amountCents: outstandingCents,
+                      displayName: att.displayName,
+                    });
+                  }}
+                >
+                  <DollarSign size={14} style={{ marginRight: "0.25rem" }} />{" "}
+                  Cash Paid
+                </button>
+              )}
+              <button
+                className="btn btn-ghost btn-icon btn-danger"
+                title="Remove player from game"
+                onClick={() => removePlayerMutation.mutate(att.id)}
+                disabled={removePlayerMutation.isPending}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          );
+        },
       },
     ],
-    [removePlayerMutation],
+    [removePlayerMutation, paymentStatus],
   );
 
   if (isLoading)
@@ -401,6 +529,73 @@ export const GameDetailPage = () => {
         </div>
       </div>
 
+      {/* Payment Summary Card */}
+      {paymentStatus && paymentStatus.summary.totalExpectedCents > 0 && (
+        <div className="card mt-md">
+          <div className="card-header">
+            <h3 className="card-header__title">
+              <DollarSign size={20} /> Payment Summary
+            </h3>
+          </div>
+          <div className="payment-summary-card">
+            <div className="payment-summary-card__stats">
+              <div className="payment-summary-card__stat">
+                <span className="payment-summary-card__stat-label">
+                  Expected
+                </span>
+                <CurrencyDisplay
+                  cents={paymentStatus.summary.totalExpectedCents}
+                  size="md"
+                  colorCode={false}
+                />
+              </div>
+              <div className="payment-summary-card__stat">
+                <span className="payment-summary-card__stat-label">
+                  Received
+                </span>
+                <CurrencyDisplay
+                  cents={-paymentStatus.summary.totalPaidCents}
+                  size="md"
+                />
+              </div>
+              <div className="payment-summary-card__stat">
+                <span className="payment-summary-card__stat-label">
+                  Outstanding
+                </span>
+                <CurrencyDisplay
+                  cents={
+                    paymentStatus.summary.totalExpectedCents -
+                    paymentStatus.summary.totalPaidCents
+                  }
+                  size="md"
+                />
+              </div>
+            </div>
+            <div className="payment-progress-bar">
+              <div
+                className="payment-progress-bar__fill"
+                style={{
+                  width: `${Math.min(100, Math.round((paymentStatus.summary.totalPaidCents / paymentStatus.summary.totalExpectedCents) * 100))}%`,
+                }}
+              />
+            </div>
+            <div className="payment-summary-card__counts">
+              <span className="payment-summary-card__count payment-summary-card__count--paid">
+                {paymentStatus.summary.paidCount} paid
+              </span>
+              {paymentStatus.summary.partialCount > 0 && (
+                <span className="payment-summary-card__count payment-summary-card__count--partial">
+                  {paymentStatus.summary.partialCount} partial
+                </span>
+              )}
+              <span className="payment-summary-card__count payment-summary-card__count--unpaid">
+                {paymentStatus.summary.unpaidCount} unpaid
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Attendance Table */}
       <div className="card mt-md">
         <div className="card-header">
@@ -466,6 +661,54 @@ export const GameDetailPage = () => {
           emptyDescription="Import a Facebook poll or add attendance manually."
         />
       </div>
+
+      <Modal
+        isOpen={!!confirmPaymentData}
+        onClose={() => setConfirmPaymentData(null)}
+        title="Confirm Custom Payment"
+        footer={
+          <div className="flex gap-sm">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setConfirmPaymentData(null)}
+              disabled={manualPaymentMutation.isPending}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                if (confirmPaymentData) {
+                  manualPaymentMutation.mutate(
+                    {
+                      playerId: confirmPaymentData.playerId,
+                      amountCents: confirmPaymentData.amountCents,
+                    },
+                    {
+                      onSuccess: () => setConfirmPaymentData(null),
+                    },
+                  );
+                }
+              }}
+              disabled={manualPaymentMutation.isPending}
+            >
+              Record Payment
+            </button>
+          </div>
+        }
+      >
+        <p className="text-secondary">
+          Are you sure you want to record a cash payment of{" "}
+          <strong>
+            {confirmPaymentData
+              ? `$${(confirmPaymentData.amountCents / 100).toFixed(2)}`
+              : ""}
+          </strong>{" "}
+          for {confirmPaymentData?.displayName}?
+        </p>
+      </Modal>
     </>
   );
 };

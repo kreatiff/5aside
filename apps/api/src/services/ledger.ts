@@ -8,10 +8,13 @@ export type LedgerEntryInsert = {
   attendanceId?: string | null;
   bankTransactionId?: string | null;
   adjustmentReason?: string | null;
+  createdAt?: string | Date;
 };
 
-export async function insertLedgerEntry(client: PoolClient, entry: LedgerEntryInsert): Promise<void> {
-  await client.query(
+export async function insertLedgerEntry(client: PoolClient, entry: LedgerEntryInsert): Promise<string> {
+  const createdAtParam = entry.createdAt ? new Date(entry.createdAt).toISOString() : null;
+
+  const result = await client.query<{ id: string }>(
     `INSERT INTO ledger_entries (
       player_id,
       type,
@@ -19,8 +22,10 @@ export async function insertLedgerEntry(client: PoolClient, entry: LedgerEntryIn
       game_id,
       attendance_id,
       bank_transaction_id,
-      adjustment_reason
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      adjustment_reason,
+      created_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, NOW()))
+    RETURNING id`,
     [
       entry.playerId,
       entry.type,
@@ -28,9 +33,12 @@ export async function insertLedgerEntry(client: PoolClient, entry: LedgerEntryIn
       entry.gameId ?? null,
       entry.attendanceId ?? null,
       entry.bankTransactionId ?? null,
-      entry.adjustmentReason ?? null
+      entry.adjustmentReason ?? null,
+      createdAtParam
     ]
   );
+
+  const entryId = result.rows[0]!.id;
 
   // Determine the effective date of this entry for cutoff comparison
   let effectiveDate: string | null = null;
@@ -61,4 +69,6 @@ export async function insertLedgerEntry(client: PoolClient, entry: LedgerEntryIn
       entry.playerId
     ]);
   }
+
+  return entryId;
 }

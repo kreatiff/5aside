@@ -1946,3 +1946,218 @@ input[type="checkbox"] {
 .attendance-add-form__charge-toggle input[type="checkbox"] {
   margin: 0;
 }
+
+/* ========================================================================
+   Payment Matrix (Heatmap)
+   ======================================================================== */
+
+.payment-matrix-wrapper {
+  padding: 0;
+  overflow: hidden;
+}
+
+.payment-matrix-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+.payment-matrix {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--font-sm);
+}
+
+.payment-matrix__header-cell {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-align: center;
+  border-bottom: 2px solid var(--border-color);
+  background: var(--bg-surface);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.payment-matrix__player-cell {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-weight: 500;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 140px;
+}
+
+.payment-matrix__player-cell.payment-matrix__header-cell {
+  z-index: 3;
+  text-align: left;
+}
+
+.payment-matrix__cell {
+  padding: var(--spacing-xs);
+  text-align: center;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
+  min-width: 52px;
+}
+
+.payment-matrix__cell:hover {
+  filter: brightness(1.2);
+  box-shadow: inset 0 0 0 2px var(--border-color);
+}
+
+.payment-matrix__cell--paid {
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.payment-matrix__cell--partial {
+  background: rgba(245, 158, 11, 0.2);
+}
+
+.payment-matrix__cell--unpaid {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.payment-matrix__cell--absent {
+  background: transparent;
+}
+
+.payment-matrix__cell-icon {
+  font-size: var(--font-xs);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+
+.payment-matrix__cell--paid .payment-matrix__cell-icon {
+  color: var(--success);
+}
+
+.payment-matrix__cell--partial .payment-matrix__cell-icon {
+  color: var(--warning);
+}
+
+.payment-matrix__cell--unpaid .payment-matrix__cell-icon {
+  color: var(--danger);
+}
+
+.payment-matrix__credit-flag {
+  color: var(--info);
+  font-weight: 700;
+  margin-left: 2px;
+  cursor: help;
+}
+
+.payment-matrix__summary-row {
+  border-top: 2px solid var(--border-color);
+}
+
+.payment-matrix__summary-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.payment-matrix__summary-cell {
+  cursor: default;
+}
+
+.payment-matrix__summary-cell:hover {
+  box-shadow: none;
+  filter: none;
+}
+
+/* ========================================================================
+   Payment Summary Card (Game Detail)
+   ======================================================================== */
+
+.payment-summary-card {
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.payment-summary-card__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.payment-summary-card__stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.payment-summary-card__stat-label {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* Payment Progress Bar */
+
+.payment-progress-bar {
+  height: 8px;
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: var(--spacing-md);
+}
+
+.payment-progress-bar__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--success), var(--primary));
+  border-radius: 4px;
+  transition: width var(--duration-slow) var(--ease-out-expo);
+}
+
+.payment-summary-card__counts {
+  display: flex;
+  gap: var(--spacing-md);
+  font-size: var(--font-sm);
+  font-weight: 500;
+}
+
+.payment-summary-card__count {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.payment-summary-card__count::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.payment-summary-card__count--paid::before {
+  background: var(--success);
+}
+
+.payment-summary-card__count--partial::before {
+  background: var(--warning);
+}
+
+.payment-summary-card__count--unpaid::before {
+  background: var(--danger);
+}

@@ -21,7 +21,9 @@ type Game = {
   facebookEventUrl?: string | null;
 };
 
-function getStatusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
+function getStatusVariant(
+  status: string,
+): "success" | "warning" | "danger" | "info" | "neutral" {
   switch (status) {
     case "synced":
       return "success";
@@ -63,7 +65,9 @@ const columns: Column<Game>[] = [
   {
     key: "feeCents",
     header: "Fee",
-    render: (game) => <CurrencyDisplay cents={game.feeCents} size="sm" colorCode={false} />,
+    render: (game) => (
+      <CurrencyDisplay cents={game.feeCents} size="sm" colorCode={false} />
+    ),
   },
   {
     key: "attendanceCount",
@@ -71,9 +75,22 @@ const columns: Column<Game>[] = [
     render: (game) => game.attendanceCount || 0,
   },
   {
+    key: "expected",
+    header: "Expected",
+    render: (game) => (
+      <CurrencyDisplay
+        cents={(game.attendanceCount || 0) * game.feeCents}
+        size="sm"
+        colorCode={false}
+      />
+    ),
+  },
+  {
     key: "source",
     header: "Source",
-    render: (game) => <span className="text-muted text-capitalize">{game.source}</span>,
+    render: (game) => (
+      <span className="text-muted text-capitalize">{game.source}</span>
+    ),
   },
 ];
 
@@ -98,11 +115,14 @@ export const GamesPage = () => {
   const [batchStartDate, setBatchStartDate] = useState(
     new Date().toISOString().substring(0, 10),
   );
-  const [batchFrequency, setBatchFrequency] = useState<BatchFrequency>("weekly");
+  const [batchFrequency, setBatchFrequency] =
+    useState<BatchFrequency>("weekly");
   const [batchUrls, setBatchUrls] = useState("");
 
   // Batch update state
-  const [selectedGameIds, setSelectedGameIds] = useState<Set<string>>(new Set());
+  const [selectedGameIds, setSelectedGameIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
   const [newBatchFee, setNewBatchFee] = useState("");
 
@@ -162,7 +182,10 @@ export const GamesPage = () => {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["games"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      addToast("success", `Created ${result.summary.total} games (${result.summary.scheduled} scheduled, ${result.summary.pending} pending)`);
+      addToast(
+        "success",
+        `Created ${result.summary.total} games (${result.summary.scheduled} scheduled, ${result.summary.pending} pending)`,
+      );
       setShowBatchModal(false);
       setBatchUrls("");
     },
@@ -186,7 +209,10 @@ export const GamesPage = () => {
       const successful = result.updated.filter((r: any) => r.success).length;
       const failed = result.updated.filter((r: any) => !r.success).length;
       if (failed > 0) {
-        addToast("info", `Updated ${successful} games, ${failed} failed (locked or not found)`);
+        addToast(
+          "info",
+          `Updated ${successful} games, ${failed} failed (locked or not found)`,
+        );
       } else {
         addToast("success", `Updated ${successful} games`);
       }
@@ -217,7 +243,10 @@ export const GamesPage = () => {
 
   // Batch preview computation
   const batchPreview = useMemo((): BatchPreviewItem[] => {
-    const urls = batchUrls.split("\n").map(s => s.trim()).filter(Boolean);
+    const urls = batchUrls
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (urls.length === 0 || !batchStartDate) return [];
 
     const today = new Date().toISOString().slice(0, 10);
@@ -226,8 +255,12 @@ export const GamesPage = () => {
     return urls.map((url, i) => {
       const d = new Date(start);
       switch (batchFrequency) {
-        case "weekly": d.setDate(d.getDate() + i * 7); break;
-        case "fortnightly": d.setDate(d.getDate() + i * 14); break;
+        case "weekly":
+          d.setDate(d.getDate() + i * 7);
+          break;
+        case "fortnightly":
+          d.setDate(d.getDate() + i * 14);
+          break;
         case "monthly": {
           d.setMonth(d.getMonth() + i);
           const targetMonth = (start.getMonth() + i) % 12;
@@ -241,22 +274,28 @@ export const GamesPage = () => {
       return {
         date: dateStr,
         url,
-        status: dateStr >= today ? "scheduled" as const : "pending" as const,
+        status:
+          dateStr >= today ? ("scheduled" as const) : ("pending" as const),
         valid: FB_EVENT_URL_REGEX.test(url),
       };
     });
   }, [batchUrls, batchStartDate, batchFrequency]);
 
-  const allUrlsValid = batchPreview.length > 0 && batchPreview.every(item => item.valid);
-  const scheduledCount = batchPreview.filter(i => i.status === "scheduled").length;
-  const pendingCount = batchPreview.filter(i => i.status === "pending").length;
+  const allUrlsValid =
+    batchPreview.length > 0 && batchPreview.every((item) => item.valid);
+  const scheduledCount = batchPreview.filter(
+    (i) => i.status === "scheduled",
+  ).length;
+  const pendingCount = batchPreview.filter(
+    (i) => i.status === "pending",
+  ).length;
 
   const handleBatchSubmit = () => {
     if (!allUrlsValid) return;
     batchCreateMutation.mutate({
       startDate: batchStartDate,
       frequency: batchFrequency,
-      facebookEventUrls: batchPreview.map(i => i.url),
+      facebookEventUrls: batchPreview.map((i) => i.url),
     });
   };
 
@@ -280,7 +319,10 @@ export const GamesPage = () => {
                 Update {selectedGameIds.size} Fee
               </button>
             )}
-            <button className="btn btn-outline" onClick={() => setShowBatchModal(true)}>
+            <button
+              className="btn btn-outline"
+              onClick={() => setShowBatchModal(true)}
+            >
               <Layers size={16} /> Batch Create
             </button>
             <button className="btn btn-primary" onClick={handleCreateGame}>
@@ -369,7 +411,9 @@ export const GamesPage = () => {
               }}
             />
           </div>
-          <span className="form-hint">Amount in cents (e.g. 1000 = $10.00)</span>
+          <span className="form-hint">
+            Amount in cents (e.g. 1000 = $10.00)
+          </span>
         </div>
       </Modal>
 
@@ -414,7 +458,9 @@ export const GamesPage = () => {
             <select
               className="input-field"
               value={batchFrequency}
-              onChange={(e) => setBatchFrequency(e.target.value as BatchFrequency)}
+              onChange={(e) =>
+                setBatchFrequency(e.target.value as BatchFrequency)
+              }
             >
               <option value="weekly">Weekly</option>
               <option value="fortnightly">Fortnightly</option>
@@ -430,11 +476,13 @@ export const GamesPage = () => {
             rows={6}
             value={batchUrls}
             onChange={(e) => setBatchUrls(e.target.value)}
-            placeholder={"https://facebook.com/events/123456789\nhttps://facebook.com/events/234567890\nhttps://facebook.com/events/345678901"}
+            placeholder={
+              "https://facebook.com/events/123456789\nhttps://facebook.com/events/234567890\nhttps://facebook.com/events/345678901"
+            }
           />
           <span className="form-hint">
-            One URL per line. Each URL will be assigned a game date starting from the start date,
-            incrementing by the selected frequency.
+            One URL per line. Each URL will be assigned a game date starting
+            from the start date, incrementing by the selected frequency.
           </span>
         </div>
 
@@ -442,7 +490,8 @@ export const GamesPage = () => {
           <div className="card" style={{ marginTop: "var(--spacing-md)" }}>
             <div className="card-header">
               <h4 className="card-header__title">
-                Preview ({batchPreview.length} game{batchPreview.length !== 1 ? "s" : ""})
+                Preview ({batchPreview.length} game
+                {batchPreview.length !== 1 ? "s" : ""})
               </h4>
             </div>
             <table className="batch-preview-table">
@@ -473,7 +522,13 @@ export const GamesPage = () => {
                 ))}
               </tbody>
             </table>
-            <div className="text-secondary" style={{ padding: "var(--spacing-sm) var(--spacing-md)", fontSize: "var(--font-size-sm)" }}>
+            <div
+              className="text-secondary"
+              style={{
+                padding: "var(--spacing-sm) var(--spacing-md)",
+                fontSize: "var(--font-size-sm)",
+              }}
+            >
               {scheduledCount} scheduled, {pendingCount} pending
             </div>
           </div>
@@ -496,10 +551,16 @@ export const GamesPage = () => {
             </button>
             <button
               className="btn btn-primary"
-              disabled={newBatchFee === "" || isNaN(Number(newBatchFee)) || batchUpdateMutation.isPending}
+              disabled={
+                newBatchFee === "" ||
+                isNaN(Number(newBatchFee)) ||
+                batchUpdateMutation.isPending
+              }
               onClick={() => batchUpdateMutation.mutate()}
             >
-              {batchUpdateMutation.isPending ? "Updating..." : `Update ${selectedGameIds.size} Game${selectedGameIds.size !== 1 ? "s" : ""}`}
+              {batchUpdateMutation.isPending
+                ? "Updating..."
+                : `Update ${selectedGameIds.size} Game${selectedGameIds.size !== 1 ? "s" : ""}`}
             </button>
           </>
         }
@@ -517,7 +578,8 @@ export const GamesPage = () => {
             />
           </div>
           <span className="form-hint">
-            Only games without charges or that are not synced will be updated. Other games will be skipped.
+            Only games without charges or that are not synced will be updated.
+            Other games will be skipped.
           </span>
         </div>
       </Modal>
