@@ -287,7 +287,7 @@ export async function importRoutes(app: FastifyInstance) {
 
     // Transform Pocketsmith format → internal ProcessBankRowInput format
     const mappedRows = transactions.map((tx) => ({
-      externalTxnId: `ps_${tx.id}`,
+      externalTxnId: `${tx.id}`,
       postedAtUtc: new Date(tx.date).toISOString(),
       amountCents: Math.round(tx.amount * 100),
       descriptionRaw: tx.description,

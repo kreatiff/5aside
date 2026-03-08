@@ -191,4 +191,5 @@ const PocketsmithResponseSchema = z.object({
 });
 
 export const WebhookPocketsmithSchema = z.array(PocketsmithResponseSchema).min(1);
+
 export type WebhookPocketsmithInput = z.infer<typeof WebhookPocketsmithSchema>;
