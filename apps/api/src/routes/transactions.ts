@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { query } from "../db/helpers.js";
 import { toIso } from "../utils/mappers.js";
 
@@ -6,7 +7,8 @@ export async function transactionRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
 
   app.get("/api/bank-transactions", async (request) => {
-    const limit = Number((request.query as any).limit) || 10000;
+    const limitParsed = z.coerce.number().int().min(1).max(10000).default(1000).safeParse((request.query as any).limit);
+    const limit = limitParsed.success ? limitParsed.data : 1000;
 
     const { rows } = await query<{
       id: string;

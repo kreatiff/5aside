@@ -202,11 +202,7 @@ export async function playerRoutes(app: FastifyInstance) {
 
   app.post("/api/players/:id/aliases", async (request, reply) => {
     const id = parseUuidParam(request, reply, "id");
-    const body = request.body as { source?: string; aliasRaw?: string };
-    
-    if (!body || !body.source || !body.aliasRaw) {
-      throw reply.badRequest("source and aliasRaw are required");
-    }
+    const body = parseBody(reply, PlayerAliasCreateSchema, request.body);
 
     const { source, aliasRaw } = body;
     const aliasNormalized = aliasRaw.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
@@ -515,16 +511,35 @@ export async function playerRoutes(app: FastifyInstance) {
     );
 
     const { sourcePlayerIds, targetPlayerId } = body;
-    
+
     if (sourcePlayerIds.includes(targetPlayerId)) {
       throw reply.badRequest("Source and target cannot be the same");
     }
 
     const client = await pool.connect();
-    
+
     try {
       await client.query('BEGIN');
-      
+
+      // Verify target player exists
+      const targetCheck = await client.query<{ id: string }>(
+        `SELECT id FROM players WHERE id = $1`,
+        [targetPlayerId]
+      );
+      if (targetCheck.rowCount === 0) {
+        throw reply.notFound("Target player not found");
+      }
+
+      // Verify all source players exist
+      const sourcePlaceholders = sourcePlayerIds.map((_, i) => `$${i + 1}`).join(", ");
+      const sourceCheck = await client.query<{ id: string }>(
+        `SELECT id FROM players WHERE id IN (${sourcePlaceholders})`,
+        sourcePlayerIds
+      );
+      if ((sourceCheck.rowCount ?? 0) < sourcePlayerIds.length) {
+        throw reply.notFound("One or more source players not found");
+      }
+
       for (const sourceId of sourcePlayerIds) {
         // Move aliases (ignore exact match conflicts)
         await client.query(`

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { CsvBankUploadSchema, BankImportSchema, WebhookBankSchema, WebhookAttendanceSchema, WebhookPocketsmithSchema } from "@fiveaside/contracts";
 import { parseCsvLines, matchPlayerByAlias, isChargeableStatus, MatchCandidate } from "@fiveaside/recon";
 import { parseBody, assertWebhookSecret } from "../utils/request.js";
@@ -54,12 +55,17 @@ function mapCsvBankRows(rows: string[][]) {
       externalTxnId: idIdx >= 0 && row[idIdx] ? row[idIdx] : undefined,
       sourceRef: typeIdx >= 0 && row[typeIdx] ? row[typeIdx] : undefined
     }))
-    .filter((mapped) => mapped.amountCents > 0 && !isNaN(mapped.amountCents));
+    .filter((mapped) => {
+      if (isNaN(mapped.amountCents)) return false;
+      if (mapped.amountCents <= 0) return false; // negative = refund/debit, zero = no-op; skip both
+      return true;
+    });
 }
 
 export async function importRoutes(app: FastifyInstance) {
   app.get("/api/imports", { preHandler: [app.requireAuth] }, async (request) => {
-    const limit = Number((request.query as any).limit) || 20;
+    const limitParsed = z.coerce.number().int().min(1).max(200).default(20).safeParse((request.query as any).limit);
+    const limit = limitParsed.success ? limitParsed.data : 20;
     const { rows } = await query(
       `SELECT id, source_type, mode, record_count, status, started_at, completed_at, error_summary
        FROM imports
@@ -158,7 +164,7 @@ export async function importRoutes(app: FastifyInstance) {
     return result;
   });
 
-  app.post("/api/webhooks/bank-transactions", async (request, reply) => {
+  app.post("/api/webhooks/bank-transactions", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
     assertWebhookSecret(request, reply);
     const body = parseBody(reply, WebhookBankSchema, request.body);
     const parsed = parseBody(reply, BankImportSchema, { rows: body.rows, mode: "webhook" });
@@ -196,7 +202,7 @@ export async function importRoutes(app: FastifyInstance) {
     return result;
   });
 
-  app.post("/api/webhooks/facebook-attendance", async (request, reply) => {
+  app.post("/api/webhooks/facebook-attendance", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
     assertWebhookSecret(request, reply);
     const body = parseBody(reply, WebhookAttendanceSchema, request.body);
 
@@ -278,7 +284,7 @@ export async function importRoutes(app: FastifyInstance) {
     return result;
   });
 
-  app.post("/api/webhooks/bank-pocketsmith", async (request, reply) => {
+  app.post("/api/webhooks/bank-pocketsmith", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
     assertWebhookSecret(request, reply);
     const body = parseBody(reply, WebhookPocketsmithSchema, request.body);
 

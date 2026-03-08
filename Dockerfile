@@ -43,6 +43,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Run as non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 # Production node_modules with workspace symlinks
 COPY --from=prod-deps /app/node_modules ./node_modules
 
@@ -67,6 +70,8 @@ COPY packages/recon/package.json ./packages/recon/
 
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
+
+USER appuser
 
 EXPOSE 4000
 

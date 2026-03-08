@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { LoginSchema, MfaVerifySchema, RefreshSchema } from "@fiveaside/contracts";
-import { query } from "../db/helpers.js";
+import { LoginSchema, MfaVerifySchema } from "@fiveaside/contracts";
+import { query, withTransaction } from "../db/helpers.js";
 import { parseBody } from "../utils/request.js";
 import { verifyPassword, verifyTotp, generateRefreshToken, hashToken } from "../services/auth.js";
 import { env } from "../config.js";
@@ -11,7 +11,7 @@ const REFRESH_TOKEN_EXPIRY_DAYS = 7;
 function setRefreshTokenCookie(reply: FastifyReply, token: string) {
   reply.setCookie("refreshToken", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: env.NODE_ENV === "production",
     sameSite: "strict",
     path: "/",
     maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60
@@ -66,8 +66,8 @@ export async function authRoutes(app: FastifyInstance) {
 
     await query(
       `INSERT INTO admin_refresh_tokens (admin_id, token_hash, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '${REFRESH_TOKEN_EXPIRY_DAYS} days')`,
-      [admin.id, tokenHash]
+       VALUES ($1, $2, NOW() + make_interval(days => $3))`,
+      [admin.id, tokenHash, REFRESH_TOKEN_EXPIRY_DAYS]
     );
 
     setRefreshTokenCookie(reply, refreshToken);
@@ -116,8 +116,8 @@ export async function authRoutes(app: FastifyInstance) {
 
     await query(
       `INSERT INTO admin_refresh_tokens (admin_id, token_hash, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '${REFRESH_TOKEN_EXPIRY_DAYS} days')`,
-      [admin.id, tokenHash]
+       VALUES ($1, $2, NOW() + make_interval(days => $3))`,
+      [admin.id, tokenHash, REFRESH_TOKEN_EXPIRY_DAYS]
     );
 
     setRefreshTokenCookie(reply, refreshToken);
@@ -133,8 +133,8 @@ export async function authRoutes(app: FastifyInstance) {
       return { accessToken };
     }
 
-    const body: any = request.body || {};
-    const refreshToken = request.cookies.refreshToken || body.refreshToken;
+    // Only accept refresh token from HttpOnly cookie — not request body
+    const refreshToken = request.cookies.refreshToken;
 
     if (!refreshToken) {
       throw reply.unauthorized("Refresh token required");
@@ -163,22 +163,29 @@ export async function authRoutes(app: FastifyInstance) {
 
     const tokenRecord = result.rows[0]!;
 
-    // Revoke old token
-    await query(`UPDATE admin_refresh_tokens SET revoked_at = NOW() WHERE id = $1`, [tokenRecord.id]);
+    // Atomically revoke old token and issue new one — prevents race conditions
+    const { accessToken, newRefreshToken } = await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE admin_refresh_tokens SET revoked_at = NOW() WHERE id = $1`,
+        [tokenRecord.id]
+      );
 
-    // Issue new pair
-    const accessToken = app.jwt.sign(
-      { sub: tokenRecord.admin_id, email: tokenRecord.email, role: tokenRecord.role },
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
-    );
-    const newRefreshToken = generateRefreshToken();
-    const newHash = hashToken(newRefreshToken);
+      const newRefreshToken = generateRefreshToken();
+      const newHash = hashToken(newRefreshToken);
 
-    await query(
-      `INSERT INTO admin_refresh_tokens (admin_id, token_hash, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '${REFRESH_TOKEN_EXPIRY_DAYS} days')`,
-      [tokenRecord.admin_id, newHash]
-    );
+      await client.query(
+        `INSERT INTO admin_refresh_tokens (admin_id, token_hash, expires_at)
+         VALUES ($1, $2, NOW() + make_interval(days => $3))`,
+        [tokenRecord.admin_id, newHash, REFRESH_TOKEN_EXPIRY_DAYS]
+      );
+
+      const accessToken = app.jwt.sign(
+        { sub: tokenRecord.admin_id, email: tokenRecord.email, role: tokenRecord.role },
+        { expiresIn: ACCESS_TOKEN_EXPIRY }
+      );
+
+      return { accessToken, newRefreshToken };
+    });
 
     setRefreshTokenCookie(reply, newRefreshToken);
     return { accessToken };

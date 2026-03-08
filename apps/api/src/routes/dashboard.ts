@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { query } from "../db/helpers.js";
 
 async function getCutoffDate(): Promise<string | null> {
@@ -46,8 +47,15 @@ export async function dashboardRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/dashboard/finance", async (request) => {
-    const months = Number((request.query as any).months) || 6;
+    const monthsParsed = z.coerce.number().int().min(1).max(60).default(6).safeParse((request.query as any).months);
+    const months = monthsParsed.success ? monthsParsed.data : 6;
     const cutoff = await getCutoffDate();
+
+    // Compute the first day of the month N months ago in UTC — avoids SQL injection
+    const now = new Date();
+    const monthsCutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1))
+      .toISOString()
+      .slice(0, 10);
 
     const result = await query<{ month: string; total_charges_cents: string; total_payments_cents: string }>(
       `SELECT
@@ -57,11 +65,11 @@ export async function dashboardRoutes(app: FastifyInstance) {
        FROM ledger_entries le
        LEFT JOIN games g ON g.id = le.game_id
        LEFT JOIN bank_transactions bt ON bt.id = le.bank_transaction_id
-       WHERE COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) >= date_trunc('month', current_date - interval '${months} months')
+       WHERE COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) >= $2::date
          AND ($1::date IS NULL OR COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) >= $1)
        GROUP BY date_trunc('month', COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date))
        ORDER BY month ASC`,
-      [cutoff]
+      [cutoff, monthsCutoff]
     );
 
     return {
@@ -75,7 +83,8 @@ export async function dashboardRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/dashboard/attendance", async (request) => {
-    const limit = Number((request.query as any).limit) || 10;
+    const limitParsed = z.coerce.number().int().min(1).max(100).default(10).safeParse((request.query as any).limit);
+    const limit = limitParsed.success ? limitParsed.data : 10;
     const cutoff = await getCutoffDate();
 
     const result = await query<{ game_date: string; total_attendees: string; chargeable_attendees: string }>(

@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import staticFiles from "@fastify/static";
 
@@ -30,9 +32,35 @@ export async function buildServer() {
 
   await app.register(sensible);
   await app.register(cookie);
+
+  // Security headers — disable CSP in dev to avoid Vite HMR issues
+  await app.register(helmet, {
+    contentSecurityPolicy: env.NODE_ENV === "production" ? undefined : false,
+    crossOriginEmbedderPolicy: env.NODE_ENV === "production"
+  });
+
+  // Rate limiting — stricter for auth/webhook endpoints via per-route config
+  await app.register(rateLimit, {
+    global: true,
+    max: 100,
+    timeWindow: "1 minute",
+    keyGenerator: (request) => request.ip
+  });
+
   await app.register(cors, {
-    origin: env.NODE_ENV === "production" ? false : true,
+    origin: env.NODE_ENV === "production" ? false : ["http://localhost:5173"],
     credentials: true
+  });
+
+  // Global error handler — sanitize PostgreSQL errors before sending to client
+  app.setErrorHandler((error, request, reply) => {
+    // PostgreSQL error codes are 5-character uppercase alphanumeric strings
+    if (error && typeof (error as any).code === "string" && /^[0-9A-Z]{5}$/.test((error as any).code)) {
+      request.log.error({ err: error }, "Database error");
+      return reply.code(500).send({ statusCode: 500, error: "Internal Server Error", message: "An internal error occurred" });
+    }
+    // Re-throw all other errors for Fastify's default handler
+    throw error;
   });
 
   app.get("/health", async () => ({ ok: true }));
