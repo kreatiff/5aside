@@ -1,5 +1,4 @@
-
-Plan
+# Plan
 
 Agent-Executable Plan: 5-a-Side Attendance/Payments App (Fee Snapshot Correctness)
 Summary
@@ -14,6 +13,7 @@ Progress Update (2026-02-28)
 Completed in this execution cycle:
 
 Backend/API
+
 - Added Fastify server bootstrap and runtime entrypoint in `apps/api/src/main.ts`.
 - Implemented health route:
   - GET /health
@@ -52,6 +52,7 @@ Backend/API
   - Added JWT-backed MFA token flow and refresh-token rotation/revocation via `admin_refresh_tokens` plus secure refresh cookie handling.
 
 Validation and Tests
+
 - Added unit tests for fee rule helpers in `apps/api/src/services/fees.test.ts`:
   - snapshotFeeForGame
   - canEditGameFee
@@ -61,12 +62,14 @@ Validation and Tests
   - `npm run typecheck`
 
 Tooling and Build Stability
+
 - Added local pg typing shim (`apps/api/src/types/pg.d.ts`) for strict TypeScript compatibility.
 - Updated API build/typecheck scripts to build shared workspace packages first.
 - Resolved tsconfig include/rootDir mismatches for `apps/api` and `packages/recon`.
 - Updated contracts test script to pass when no tests are present.
 
 Still Pending (next milestones)
+
 - Frontend app (`apps/web`) scaffolding and wiring to API workflows.
 - Integration/E2E tests for full fee-change timeline and import->reconcile->ledger path.
 - Docker/runtime composition, backup/restore flow, and migration tooling workstreams.
