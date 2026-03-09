@@ -161,7 +161,7 @@ export async function importRoutes(app: FastifyInstance) {
         if (row.alias_raw) candidates.push({ playerId: row.player_id, aliasRaw: row.alias_raw });
       }
 
-      const { posted, queued } = await processBankRows(client, filteredRows, candidates);
+      const { posted, queued } = await processBankRows(client, filteredRows, candidates, importId);
 
       await client.query(`UPDATE imports SET status = 'completed', completed_at = NOW() WHERE id = $1`, [importId]);
       return { importId, posted, queued };
@@ -199,7 +199,7 @@ export async function importRoutes(app: FastifyInstance) {
         if (row.alias_raw) candidates.push({ playerId: row.player_id, aliasRaw: row.alias_raw });
       }
 
-      const { posted, queued } = await processBankRows(client, parsed.rows, candidates);
+      const { posted, queued } = await processBankRows(client, parsed.rows, candidates, importId);
 
       await client.query(`UPDATE imports SET status = 'completed', completed_at = NOW() WHERE id = $1`, [importId]);
       return { importId, posted, queued };
@@ -214,6 +214,14 @@ export async function importRoutes(app: FastifyInstance) {
     const body = parseBody(reply, WebhookAttendanceSchema, request.body);
 
     const result = await withTransaction(async (client) => {
+      const importRow = await client.query<{ id: string }>(
+        `INSERT INTO imports (source_type, mode, checksum, record_count, status)
+         VALUES ('attendance', 'webhook', NULL, $1, 'processing')
+         RETURNING id`,
+        [body.rows.length]
+      );
+      const importId = importRow.rows[0]!.id;
+
       const gameResult = await client.query<{ fee_cents: number }>(`SELECT fee_cents FROM games WHERE id = $1`, [body.gameId]);
       if (gameResult.rowCount === 0) {
         throw reply.notFound("Game not found");
@@ -242,9 +250,9 @@ export async function importRoutes(app: FastifyInstance) {
         const match = matchPlayerByAlias(row.playerName, candidates);
         if (!match.matched) {
           await client.query(
-            `INSERT INTO reconciliation_queue (item_type, source_record_id, payload, suggested_player_id, confidence, reason)
-             VALUES ('attendance', $1, $2::jsonb, $3, $4, $5)`,
-            [body.gameId, JSON.stringify(row), match.playerId, match.confidence, match.reason]
+            `INSERT INTO reconciliation_queue (item_type, source_record_id, payload, suggested_player_id, confidence, reason, import_id)
+             VALUES ('attendance', $1, $2::jsonb, $3, $4, $5, $6)`,
+            [body.gameId, JSON.stringify(row), match.playerId, match.confidence, match.reason, importId]
           );
           queued += 1;
           continue;
@@ -252,11 +260,11 @@ export async function importRoutes(app: FastifyInstance) {
 
         const chargeable = isChargeableStatus(row.sourceStatus);
         const attendance = await client.query<{ id: string }>(
-          `INSERT INTO attendance (game_id, player_id, source_status, chargeable, source_ref)
-           VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO attendance (game_id, player_id, source_status, chargeable, source_ref, import_id)
+           VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT (game_id, player_id) DO NOTHING
            RETURNING id`,
-          [body.gameId, match.playerId, row.sourceStatus, chargeable, row.sourceRef ?? null]
+          [body.gameId, match.playerId, row.sourceStatus, chargeable, row.sourceRef ?? null, importId]
         );
 
         // If no row was returned the player was already recorded for this game — skip.
@@ -284,7 +292,9 @@ export async function importRoutes(app: FastifyInstance) {
         );
       }
 
-      return { imported, charged, queued };
+      await client.query(`UPDATE imports SET status = 'completed', completed_at = NOW() WHERE id = $1`, [importId]);
+
+      return { imported, charged, queued, importId };
     });
 
     reply.code(201);
@@ -333,7 +343,7 @@ export async function importRoutes(app: FastifyInstance) {
       }
 
       // Pass the original mapped rows (with tagNames) instead of parsed rows
-      const { posted, queued } = await processBankRows(client, mappedRows, candidates);
+      const { posted, queued } = await processBankRows(client, mappedRows, candidates, importId);
 
       await client.query(`UPDATE imports SET status = 'completed', completed_at = NOW() WHERE id = $1`, [importId]);
       return { importId, posted, queued };
@@ -341,5 +351,67 @@ export async function importRoutes(app: FastifyInstance) {
 
     reply.code(201);
     return result;
+  });
+
+  app.get("/api/imports/:id/items", { preHandler: [app.requireAuth] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const bankQuery = await query(
+      `SELECT
+         bt.id,
+         bt.posted_at_utc as date,
+         bt.description_raw as description,
+         bt.amount_cents as amount_cents,
+         (CASE 
+           WHEN r.id IS NOT NULL THEN 'queued'
+           ELSE 'processed' 
+          END) as status,
+         'bank' as type
+       FROM bank_transactions bt
+       LEFT JOIN reconciliation_queue r ON r.source_record_id = bt.id AND r.item_type = 'bank_transaction'
+       WHERE bt.import_id = $1`,
+      [id]
+    );
+
+    const matchQuery = await query(
+      `SELECT
+         a.id,
+         a.created_at as date,
+         (SELECT display_name FROM players WHERE id = a.player_id) as description,
+         (SELECT fee_cents FROM games WHERE id = a.game_id) as amount_cents,
+         (CASE 
+           WHEN r.id IS NOT NULL THEN 'queued'
+           ELSE 'processed' 
+          END) as status,
+         'attendance' as type
+       FROM attendance a
+       LEFT JOIN reconciliation_queue r ON r.source_record_id = a.id AND r.item_type = 'attendance'
+       WHERE a.import_id = $1`,
+      [id]
+    );
+
+    // Grab queued items from uncreated records
+    const uncreatedReconQuery = await query(
+      `SELECT
+         r.id,
+         r.created_at as date,
+         COALESCE(r.payload->>'descriptionRaw', r.payload->>'playerName', 'Unknown') as description,
+         COALESCE((r.payload->>'amountCents')::int, 0) as amount_cents,
+         'queued' as status,
+         r.item_type as type
+       FROM reconciliation_queue r
+       LEFT JOIN bank_transactions bt ON r.source_record_id = bt.id
+       LEFT JOIN attendance a ON r.source_record_id = a.id
+       WHERE r.import_id = $1 AND bt.id IS NULL AND a.id IS NULL`,
+      [id]
+    );
+
+    const items = [
+      ...bankQuery.rows,
+      ...matchQuery.rows,
+      ...uncreatedReconQuery.rows
+    ].sort((a, b) => new Date(String(b.date)).getTime() - new Date(String(a.date)).getTime());
+
+    return { items };
   });
 }

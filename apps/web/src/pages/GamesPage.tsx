@@ -14,9 +14,12 @@ import { formatDate, formatCurrency } from "../utils/format";
 type Game = {
   id: string;
   gameDate: string;
+  kickoff_at_utc?: string | null;
   status: string;
   feeCents: number;
   attendanceCount?: number;
+  totalExpectedCents: number;
+  totalPaidCents: number;
   source: string;
   facebookEventUrl?: string | null;
 };
@@ -43,54 +46,175 @@ const FB_EVENT_URL_REGEX = /facebook\.com\/events\/\d+/;
 const columns: Column<Game>[] = [
   {
     key: "gameDate",
-    header: "Date",
+    header: "DATE & TIME",
     sortable: true,
     sortValue: (game) => game.gameDate,
-    render: (game) => (
-      <span className="data-table__date-cell">
-        <CalendarIcon size={20} className="text-primary" />
-        {formatDate(game.gameDate)}
-      </span>
-    ),
-  },
-  {
-    key: "status",
-    header: "Status",
-    render: (game) => (
-      <StatusBadge variant={getStatusVariant(game.status)} dot>
-        {game.status}
-      </StatusBadge>
-    ),
-  },
-  {
-    key: "feeCents",
-    header: "Fee",
-    render: (game) => (
-      <CurrencyDisplay cents={game.feeCents} size="sm" colorCode={false} />
-    ),
+    render: (game) => {
+      const date = new Date(game.gameDate + "T00:00:00Z");
+      const formattedDate = date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+      const time = game.kickoff_at_utc
+        ? new Date(game.kickoff_at_utc).toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "—";
+
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontWeight: 500 }}>{formattedDate}</span>
+          <span
+            style={{
+              fontFamily: "var(--font-family-mono)",
+              fontSize: "11px",
+              color: "var(--text-muted)",
+              letterSpacing: "0.02em",
+            }}
+          >
+            {time}
+          </span>
+        </div>
+      );
+    },
   },
   {
     key: "attendanceCount",
-    header: "Attendees",
-    render: (game) => game.attendanceCount || 0,
-  },
-  {
-    key: "expected",
-    header: "Expected",
+    header: "PLAYERS",
+    align: "center",
     render: (game) => (
-      <CurrencyDisplay
-        cents={(game.attendanceCount || 0) * game.feeCents}
-        size="sm"
-        colorCode={false}
-      />
+      <div
+        style={{
+          textAlign: "center",
+          fontWeight: 500,
+          color: "var(--text-secondary)",
+        }}
+      >
+        {game.attendanceCount || 0}
+      </div>
     ),
   },
   {
-    key: "source",
-    header: "Source",
+    key: "totalExpectedCents",
+    header: "EXPECTED",
+    align: "right",
     render: (game) => (
-      <span className="text-muted text-capitalize">{game.source}</span>
+      <div style={{ textAlign: "right" }}>
+        <CurrencyDisplay
+          cents={game.totalExpectedCents}
+          size="sm"
+          colorCode={false}
+        />
+      </div>
     ),
+  },
+  {
+    key: "totalPaidCents",
+    header: "COLLECTED",
+    align: "right",
+    render: (game) => (
+      <div style={{ textAlign: "right" }}>
+        <CurrencyDisplay
+          cents={game.totalPaidCents}
+          size="sm"
+          colorCode={
+            game.totalPaidCents < game.totalExpectedCents &&
+            game.totalPaidCents > 0
+          }
+        />
+      </div>
+    ),
+  },
+  {
+    key: "paymentStatus",
+    header: "PAYMENT STATUS",
+    render: (game) => {
+      const pct =
+        game.totalExpectedCents > 0
+          ? Math.round((game.totalPaidCents / game.totalExpectedCents) * 100)
+          : 0;
+
+      let statusLabel = "PENDING";
+      let statusColor = "var(--text-muted)";
+      let squareColor = "#e5e7eb"; // light gray
+
+      const today = new Date().toISOString().slice(0, 10);
+
+      if (game.totalExpectedCents > 0) {
+        if (pct >= 100) {
+          statusLabel = "SETTLED";
+          statusColor = "var(--primary)";
+          squareColor = "var(--primary)";
+        } else if (pct > 0) {
+          statusLabel = `PARTIAL (${pct}%)`;
+          statusColor = "var(--warning)";
+          squareColor = "var(--warning)";
+        } else {
+          if (game.gameDate < today) {
+            statusLabel = "OVERDUE";
+            statusColor = "var(--danger)";
+            squareColor = "var(--danger)";
+          } else {
+            statusLabel = "PENDING";
+            statusColor = "var(--text-muted)";
+            squareColor = "#e5e7eb";
+          }
+        }
+      }
+
+      return (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+            minWidth: "140px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div
+              style={{
+                width: "8px",
+                height: "8px",
+                backgroundColor: squareColor,
+                flexShrink: 0,
+              }}
+            />
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: statusColor,
+                letterSpacing: "0.05em",
+              }}
+            >
+              {statusLabel}
+            </span>
+          </div>
+          {pct < 100 && game.totalExpectedCents > 0 && (
+            <div
+              style={{
+                width: "100%",
+                height: "2px",
+                backgroundColor: "var(--bg-base)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${pct}%`,
+                  height: "100%",
+                  backgroundColor: squareColor,
+                }}
+              />
+            </div>
+          )}
+        </div>
+      );
+    },
   },
 ];
 
@@ -353,28 +477,56 @@ export const GamesPage = () => {
           <div className="payment-summary-card">
             <div className="payment-summary-card__stats">
               <div className="payment-summary-card__stat">
-                <span className="payment-summary-card__stat-label">Game Fees Owed</span>
-                <CurrencyDisplay cents={venueSummary.totalVenueFeeCents} size="md" colorCode={false} />
+                <span className="payment-summary-card__stat-label">
+                  Game Fees Owed
+                </span>
+                <CurrencyDisplay
+                  cents={venueSummary.totalVenueFeeCents}
+                  size="md"
+                  colorCode={false}
+                />
               </div>
               <div className="payment-summary-card__stat">
-                <span className="payment-summary-card__stat-label">Game Fees Paid</span>
-                <CurrencyDisplay cents={venueSummary.totalVenuePaidCents} size="md" colorCode={false} />
+                <span className="payment-summary-card__stat-label">
+                  Game Fees Paid
+                </span>
+                <CurrencyDisplay
+                  cents={venueSummary.totalVenuePaidCents}
+                  size="md"
+                  colorCode={false}
+                />
               </div>
               <div className="payment-summary-card__stat">
-                <span className="payment-summary-card__stat-label">Outstanding</span>
-                <CurrencyDisplay cents={venueSummary.outstandingCents} size="md" />
+                <span className="payment-summary-card__stat-label">
+                  Outstanding
+                </span>
+                <CurrencyDisplay
+                  cents={venueSummary.outstandingCents}
+                  size="md"
+                />
               </div>
             </div>
             {venueSummary.totalVenueFeeCents > 0 && (
               <div className="payment-progress-bar">
                 <div
                   className="payment-progress-bar__fill"
-                  style={{ width: `${Math.min(100, Math.round((venueSummary.totalVenuePaidCents / venueSummary.totalVenueFeeCents) * 100))}%` }}
+                  style={{
+                    width: `${Math.min(100, Math.round((venueSummary.totalVenuePaidCents / venueSummary.totalVenueFeeCents) * 100))}%`,
+                  }}
                 />
               </div>
             )}
-            <div className="text-muted text-sm" style={{ padding: "0 var(--spacing-md) var(--spacing-sm)" }}>
-              {venueSummary.gameCount} games tracked &middot; {formatCurrency(Math.round(venueSummary.totalVenueFeeCents / venueSummary.gameCount))} avg per game
+            <div
+              className="text-muted text-sm"
+              style={{ padding: "0 var(--spacing-md) var(--spacing-sm)" }}
+            >
+              {venueSummary.gameCount} games tracked &middot;{" "}
+              {formatCurrency(
+                Math.round(
+                  venueSummary.totalVenueFeeCents / venueSummary.gameCount,
+                ),
+              )}{" "}
+              avg per game
             </div>
           </div>
         </div>

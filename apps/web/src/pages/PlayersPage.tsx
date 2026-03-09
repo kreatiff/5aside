@@ -163,20 +163,44 @@ export const PlayersPage = () => {
         }
       />
 
-      <div className="card">
-        <div className="card-header flex-between gap-md">
-          <div className="input-group">
-            <Search size={16} className="input-group__icon" />
+      <div style={{ position: "relative" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-end",
+            borderBottom: "2px solid var(--border-color)",
+            paddingBottom: "1rem",
+            marginBottom: "2rem",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              flex: 1,
+            }}
+          >
+            <Search size={24} style={{ color: "var(--text-primary)" }} />
             <input
               type="text"
-              className="input-field"
               placeholder="Search players..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              style={{
+                fontFamily: "var(--font-family-display)",
+                fontSize: "24px",
+                border: "none",
+                background: "transparent",
+                outline: "none",
+                flex: 1,
+                color: "var(--text-primary)",
+              }}
             />
           </div>
 
-          <div className="flex-between gap-sm">
+          <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
               className={`btn btn-sm ${filter === "active" ? "btn-primary" : "btn-ghost"}`}
               onClick={() => setFilter("active")}

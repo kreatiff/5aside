@@ -37,10 +37,130 @@ export async function gameRoutes(app: FastifyInstance) {
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
+
+    const gamesData = result.rows.map(row => ({
+      ...mapGame(row),
+      attendanceCount: Number(row.attendance_count)
+    }));
+
+    if (gamesData.length === 0) {
+      return { data: [], total, limit, offset };
+    }
+
+    // --- Rich Financial Data Calculation ---
+    // Fetch all players who attended these games
+    const gameIds = gamesData.map(g => g.id);
+    const attendanceResult = await query<{ game_id: string, player_id: string }>(
+      `SELECT game_id, player_id FROM attendance WHERE game_id = ANY($1) AND chargeable = true`,
+      [gameIds]
+    );
+    const affectedPlayerIds = Array.from(new Set(attendanceResult.rows.map(r => r.player_id)));
+
+    if (affectedPlayerIds.length === 0) {
+      return {
+        data: gamesData.map(g => ({ ...g, totalExpectedCents: 0, totalPaidCents: 0 })),
+        total, limit, offset
+      };
+    }
+
+    // Get cutoff date
+    const settingsResult = await query<{ cutoff_date: string | null }>(
+      `SELECT cutoff_date::text FROM settings WHERE id = 1`
+    );
+    const cutoffDate = settingsResult.rows[0]?.cutoff_date?.slice(0, 10) ?? null;
+
+    // Fetch ledger entries for these players
+    const ledgerResult = await query<{
+      player_id: string;
+      type: string;
+      amount_cents: number;
+      game_id: string | null;
+      attendance_id: string | null;
+      created_at: string;
+      game_date: string | null;
+    }>(
+      `SELECT le.player_id, le.type, le.amount_cents, le.game_id, le.attendance_id,
+              le.created_at::text AS created_at, g.game_date::text AS game_date
+       FROM ledger_entries le
+       LEFT JOIN games g ON g.id = le.game_id
+       LEFT JOIN bank_transactions bt ON bt.id = le.bank_transaction_id
+       WHERE le.player_id = ANY($1)
+         AND ($2::date IS NULL OR COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) >= $2)
+       ORDER BY le.created_at ASC`,
+      [affectedPlayerIds, cutoffDate]
+    );
+
+    // Group ledger entries by player
+    const chargesByPlayer = new Map<string, ChargeEntry[]>();
+    const paymentsByPlayer = new Map<string, PaymentEntry[]>();
+
+    for (const entry of ledgerResult.rows) {
+      if (entry.type === "charge" && entry.game_id && entry.game_date) {
+        const arr = chargesByPlayer.get(entry.player_id) ?? [];
+        arr.push({
+          gameId: entry.game_id,
+          attendanceId: entry.attendance_id ?? "",
+          playerId: entry.player_id,
+          amountCents: entry.amount_cents,
+          gameDate: entry.game_date,
+        });
+        chargesByPlayer.set(entry.player_id, arr);
+      } else if (entry.type === "payment") {
+        const arr = paymentsByPlayer.get(entry.player_id) ?? [];
+        arr.push({
+          playerId: entry.player_id,
+          amountCents: Math.abs(entry.amount_cents),
+          createdAt: entry.created_at,
+          gameId: entry.game_id,
+        });
+        paymentsByPlayer.set(entry.player_id, arr);
+      } else if (entry.type === "adjustment") {
+        if (entry.amount_cents < 0) {
+          const arr = paymentsByPlayer.get(entry.player_id) ?? [];
+          arr.push({
+            playerId: entry.player_id,
+            amountCents: Math.abs(entry.amount_cents),
+            createdAt: entry.created_at,
+            gameId: entry.game_id,
+          });
+          paymentsByPlayer.set(entry.player_id, arr);
+        } else if (entry.amount_cents > 0) {
+          const arr = chargesByPlayer.get(entry.player_id) ?? [];
+          arr.push({
+            gameId: entry.game_id ?? "",
+            attendanceId: entry.attendance_id ?? "",
+            playerId: entry.player_id,
+            amountCents: entry.amount_cents,
+            gameDate: entry.game_date ?? entry.created_at.slice(0, 10),
+          });
+          chargesByPlayer.set(entry.player_id, arr);
+        }
+      }
+    }
+
+    // Map of gameId -> { expected, paid }
+    const gameStats = new Map<string, { expected: number; paid: number }>();
+    for (const gid of gameIds) gameStats.set(gid, { expected: 0, paid: 0 });
+
+    for (const pid of affectedPlayerIds) {
+      const charges = chargesByPlayer.get(pid) ?? [];
+      const payments = paymentsByPlayer.get(pid) ?? [];
+      const pairings = pairPaymentsToCharges(charges, payments);
+
+      for (const p of pairings) {
+        const stats = gameStats.get(p.gameId);
+        if (stats) {
+          stats.expected += p.chargeCents;
+          stats.paid += p.paidCents;
+        }
+      }
+    }
+
     return {
-      data: result.rows.map(row => ({
-        ...mapGame(row),
-        attendanceCount: Number(row.attendance_count)
+      data: gamesData.map(g => ({
+        ...g,
+        totalExpectedCents: gameStats.get(g.id)?.expected ?? 0,
+        totalPaidCents: gameStats.get(g.id)?.paid ?? 0
       })),
       total,
       limit,

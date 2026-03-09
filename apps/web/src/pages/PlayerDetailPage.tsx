@@ -22,8 +22,6 @@ import {
   formatDate,
   formatDateTime,
   parseDateToTimestamp,
-  getInitials,
-  getAvatarColor,
 } from "../utils/format";
 
 type PlayerDetails = {
@@ -392,12 +390,6 @@ export const PlayerDetailPage = () => {
         description={`Added ${formatDateTime(player.createdAt)}`}
         actions={
           <div className="flex-between gap-md">
-            <div
-              className="player-avatar-lg"
-              style={{ background: getAvatarColor(player.displayName) }}
-            >
-              {getInitials(player.displayName)}
-            </div>
             <div>
               <StatusBadge
                 variant={player.active ? "success" : "neutral"}
@@ -648,7 +640,7 @@ export const PlayerDetailPage = () => {
       </div>
 
       {/* Ledger Column */}
-      <div className="card mb-lg">
+      <div className="mb-lg" style={{ marginTop: "2rem" }}>
         <div className="card-header">
           <h3 className="card-header__title">Recent Transactions</h3>
           <div

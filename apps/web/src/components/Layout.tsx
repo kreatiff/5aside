@@ -7,8 +7,7 @@ import { api } from "../lib/api";
 import {
   LayoutDashboard,
   Users,
-  Calendar,
-  DollarSign,
+  Grid3X3,
   Download,
   Banknote,
   ArrowRightLeft,
@@ -19,11 +18,121 @@ import {
 } from "lucide-react";
 import { getInitials } from "../utils/format";
 
+const SoccerBall = ({ size = 20 }: { size?: number }) => (
+  <svg
+    id="Soccer-Ball--Streamline-Streamline-3.0"
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    height={size}
+    width={size}
+  >
+    <desc>Soccer Ball Streamline Icon: https://streamlinehq.com</desc>
+    <defs></defs>
+    <title>soccer-ball</title>
+    <path
+      d="M12 0.75A11.25 11.25 0 1 0 23.25 12 11.25 11.25 0 0 0 12 0.75Z"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="m8.895 16.754 -1.91 -5.9L12 7.208l5.015 3.646 -1.91 5.9 -6.21 0z"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="M16.301 1.601 12 4.5 7.699 1.601"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="m14.599 22.948 2.139 -4.366 4.884 -0.75"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="m23.214 12.909 -3.427 -3.413 0.735 -4.839"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="m12 4.5 0 2.708"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="m17.015 10.854 2.772 -1.358"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="m0.786 12.909 3.427 -3.413 -0.735 -4.839"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="M6.985 10.854 4.213 9.496"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="m15.105 16.754 1.633 1.828"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="m9.401 22.948 -2.139 -4.366 -4.884 -0.75"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+    <path
+      d="m8.895 16.754 -1.633 1.828"
+      fill="none"
+      stroke="#000000"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="1.5"
+    ></path>
+  </svg>
+);
+
 const routes = [
   { path: "/dashboard", name: "Dashboard", icon: LayoutDashboard },
   { path: "/players", name: "Players", icon: Users },
-  { path: "/games", name: "Games", icon: Calendar },
-  { path: "/payments", name: "Payments", icon: DollarSign },
+  { path: "/games", name: "Games", icon: SoccerBall },
+  { path: "/payments", name: "Matrix", icon: Grid3X3 },
   { path: "/imports", name: "Imports", icon: Download },
   { path: "/transactions", name: "Transactions", icon: Banknote },
   { path: "/reconciliation", name: "Reconciliation", icon: ArrowRightLeft },
@@ -72,9 +181,25 @@ export const Layout = ({ children }: { children: ReactNode }) => {
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="sidebar-header">
-          <div className="logo-icon">5</div>
-          <h2>5-a-Side</h2>
+        <div
+          className="sidebar-header"
+          style={{
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: "1.5rem",
+            marginBottom: "2rem",
+          }}
+        >
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
+            <div
+              className="logo-icon"
+              style={{ width: "40px", height: "40px" }}
+            >
+              5
+            </div>
+          </div>
         </div>
 
         <nav className="sidebar-nav">

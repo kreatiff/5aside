@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS bank_transactions (
   amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
   description_raw TEXT NOT NULL,
   source_ref TEXT,
+  import_id UUID REFERENCES imports(id) ON DELETE SET NULL,
   is_outgoing BOOLEAN NOT NULL DEFAULT FALSE,
   venue_category TEXT DEFAULT NULL CHECK (venue_category IN ('game_fees', 'equipment')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -142,7 +143,8 @@ CREATE TABLE IF NOT EXISTS reconciliation_queue (
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'dismissed')),
   resolved_by UUID REFERENCES admins(id) ON DELETE SET NULL,
   resolved_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  import_id UUID REFERENCES imports(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_aliases_normalized ON player_aliases(alias_normalized);

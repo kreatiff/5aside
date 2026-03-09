@@ -109,10 +109,20 @@ export const DashboardPage = () => {
 
   return (
     <>
-      <PageHeader title="Dashboard" />
+      <PageHeader
+        title="Dashboard Overview"
+        description="At-a-glance summary of financial health and operations."
+      />
 
       {/* KPI Cards */}
-      <div className="stat-grid mb-lg">
+      <div
+        className="stat-grid mb-lg"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: "1.5rem",
+        }}
+      >
         {loadingSummary ? (
           <>
             <SkeletonStatCard />
@@ -154,272 +164,344 @@ export const DashboardPage = () => {
         )}
       </div>
 
-      {/* Charts */}
-      <div className="grid-2 mb-lg">
-        <div className="card">
-          <div className="card-header">
-            <span className="card-header__title">Financial Overview</span>
+      {/* 60/40 Split Content */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)",
+          gap: "2rem",
+          marginBottom: "var(--spacing-lg)",
+        }}
+      >
+        {/* Left Column (60%) */}
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <h3 style={{ fontSize: "1.125rem", fontWeight: 600, margin: 0 }}>
+              Financial Overview
+            </h3>
           </div>
-          <div style={{ height: 280 }}>
-            {loadingFinance ? (
-              <div
-                className="skeleton"
-                style={{ width: "100%", height: "100%", borderRadius: 8 }}
-              />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={finance}
-                  margin={{ top: 5, right: 5, left: -10, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient
-                      id="fillCharges"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop
-                        offset="0%"
-                        stopColor="#ef4444"
-                        stopOpacity={0.35}
-                      />
-                      <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient
-                      id="fillPayments"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop
-                        offset="0%"
-                        stopColor="#22c55e"
-                        stopOpacity={0.35}
-                      />
-                      <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    stroke="rgba(148,163,184,0.06)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="month"
-                    stroke="var(--text-muted)"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    stroke="var(--text-muted)"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => `$${v / 100}`}
-                  />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Area
-                    type="monotone"
-                    name="Charges"
-                    dataKey="totalChargesCents"
-                    stroke="#ef4444"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#fillCharges)"
-                    animationDuration={1200}
-                  />
-                  <Area
-                    type="monotone"
-                    name="Payments"
-                    dataKey="totalPaymentsCents"
-                    stroke="#22c55e"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#fillPayments)"
-                    animationDuration={1200}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
+          <div className="card" style={{ padding: "1.5rem" }}>
+            <div style={{ height: 280 }}>
+              {loadingFinance ? (
+                <div
+                  className="skeleton"
+                  style={{ width: "100%", height: "100%", borderRadius: 8 }}
+                />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={finance}
+                    margin={{ top: 5, right: 5, left: -10, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient
+                        id="fillCharges"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="#ef4444"
+                          stopOpacity={0.35}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="#ef4444"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                      <linearGradient
+                        id="fillPayments"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="#22c55e"
+                          stopOpacity={0.35}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="#22c55e"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      stroke="rgba(148,163,184,0.06)"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="month"
+                      stroke="var(--text-muted)"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      stroke="var(--text-muted)"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(v) => `$${v / 100}`}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area
+                      type="monotone"
+                      name="Charges"
+                      dataKey="totalChargesCents"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#fillCharges)"
+                      animationDuration={1200}
+                    />
+                    <Area
+                      type="monotone"
+                      name="Payments"
+                      dataKey="totalPaymentsCents"
+                      stroke="#22c55e"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#fillPayments)"
+                      animationDuration={1200}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <ChartLegend
+              items={[
+                { label: "Charges", color: "#ef4444" },
+                { label: "Payments", color: "#22c55e" },
+              ]}
+            />
           </div>
-          <ChartLegend
-            items={[
-              { label: "Charges", color: "#ef4444" },
-              { label: "Payments", color: "#22c55e" },
-            ]}
-          />
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: "0.5rem",
+            }}
+          >
+            <h3 style={{ fontSize: "1.125rem", fontWeight: 600, margin: 0 }}>
+              Recent Attendance
+            </h3>
+          </div>
+          <div className="card" style={{ padding: "1.5rem" }}>
+            <div style={{ height: 280 }}>
+              {loadingAttendance ? (
+                <div
+                  className="skeleton"
+                  style={{ width: "100%", height: "100%", borderRadius: 8 }}
+                />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={attendance}
+                    margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="barTotal" x1="0" y1="0" x2="0" y2="1">
+                        <stop
+                          offset="0%"
+                          stopColor="#14b8a6"
+                          stopOpacity={0.9}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="#14b8a6"
+                          stopOpacity={0.4}
+                        />
+                      </linearGradient>
+                      <linearGradient
+                        id="barCharged"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="#f59e0b"
+                          stopOpacity={0.9}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="#f59e0b"
+                          stopOpacity={0.4}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      stroke="rgba(148,163,184,0.06)"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="gameDate"
+                      stroke="var(--text-muted)"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      stroke="var(--text-muted)"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      content={<ChartTooltip formatValue={(v) => String(v)} />}
+                    />
+                    <Bar
+                      dataKey="totalAttendees"
+                      name="Total"
+                      fill="url(#barTotal)"
+                      radius={[4, 4, 0, 0]}
+                      animationDuration={1200}
+                    />
+                    <Bar
+                      dataKey="chargeableAttendees"
+                      name="Charged"
+                      fill="url(#barCharged)"
+                      radius={[4, 4, 0, 0]}
+                      animationDuration={1200}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <ChartLegend
+              items={[
+                { label: "Total Attendees", color: "#14b8a6" },
+                { label: "Charged", color: "#f59e0b" },
+              ]}
+            />
+          </div>
         </div>
 
-        <div className="card">
-          <div className="card-header">
-            <span className="card-header__title">Recent Attendance</span>
-          </div>
-          <div style={{ height: 280 }}>
-            {loadingAttendance ? (
-              <div
-                className="skeleton"
-                style={{ width: "100%", height: "100%", borderRadius: 8 }}
-              />
+        {/* Right Column (40%) */}
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
+        >
+          <h3 style={{ fontSize: "1.125rem", fontWeight: 600, margin: 0 }}>
+            Pending Actions & Debtors
+          </h3>
+          <div
+            className="card"
+            style={{
+              padding: "1.5rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            }}
+          >
+            {topDebtors.length === 0 ? (
+              <p
+                style={{
+                  color: "var(--text-muted)",
+                  fontSize: "var(--font-sm)",
+                  textAlign: "center",
+                  padding: "var(--spacing-lg) 0",
+                }}
+              >
+                No outstanding balances
+              </p>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={attendance}
-                  margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="barTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#14b8a6" stopOpacity={0.9} />
-                      <stop
-                        offset="100%"
-                        stopColor="#14b8a6"
-                        stopOpacity={0.4}
-                      />
-                    </linearGradient>
-                    <linearGradient id="barCharged" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.9} />
-                      <stop
-                        offset="100%"
-                        stopColor="#f59e0b"
-                        stopOpacity={0.4}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    stroke="rgba(148,163,184,0.06)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="gameDate"
-                    stroke="var(--text-muted)"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    stroke="var(--text-muted)"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    allowDecimals={false}
-                  />
-                  <Tooltip
-                    content={<ChartTooltip formatValue={(v) => String(v)} />}
-                  />
-                  <Bar
-                    dataKey="totalAttendees"
-                    name="Total"
-                    fill="url(#barTotal)"
-                    radius={[4, 4, 0, 0]}
-                    animationDuration={1200}
-                  />
-                  <Bar
-                    dataKey="chargeableAttendees"
-                    name="Charged"
-                    fill="url(#barCharged)"
-                    radius={[4, 4, 0, 0]}
-                    animationDuration={1200}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              topDebtors.map((p, i) => (
+                <div className="debtor-row" key={p.id}>
+                  <span className="debtor-rank">{i + 1}</span>
+                  <Link to={`/players/${p.id}`} className="debtor-name">
+                    {p.displayName}
+                  </Link>
+                  <div className="debtor-bar">
+                    <div
+                      className="debtor-bar__fill"
+                      style={{
+                        width: `${(p.currentBalanceCents / maxDebt) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "var(--font-sm)",
+                      fontWeight: 600,
+                      color: "var(--danger)",
+                      fontVariantNumeric: "tabular-nums",
+                      minWidth: 70,
+                      textAlign: "right",
+                    }}
+                  >
+                    {formatCurrency(p.currentBalanceCents)}
+                  </span>
+                </div>
+              ))
             )}
           </div>
-          <ChartLegend
-            items={[
-              { label: "Total Attendees", color: "#14b8a6" },
-              { label: "Charged", color: "#f59e0b" },
-            ]}
-          />
-        </div>
-      </div>
 
-      {/* Bottom Row: Top Debtors + Quick Actions */}
-      <div className="grid-2">
-        <div className="card">
-          <div className="card-header">
-            <span className="card-header__title">Top Debtors</span>
-            <Link to="/players" style={{ fontSize: "var(--font-sm)" }}>
-              View all
-            </Link>
-          </div>
-          {topDebtors.length === 0 ? (
-            <p
+          <h3
+            style={{
+              fontSize: "1.125rem",
+              fontWeight: 600,
+              margin: 0,
+              marginTop: "1rem",
+            }}
+          >
+            Quick Actions
+          </h3>
+          <div className="card" style={{ padding: "1.5rem" }}>
+            <div
+              className="quick-actions-grid"
               style={{
-                color: "var(--text-muted)",
-                fontSize: "var(--font-sm)",
-                textAlign: "center",
-                padding: "var(--spacing-lg) 0",
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 1fr)",
+                gap: "1rem",
               }}
             >
-              No outstanding balances
-            </p>
-          ) : (
-            topDebtors.map((p, i) => (
-              <div className="debtor-row" key={p.id}>
-                <span className="debtor-rank">{i + 1}</span>
-                <Link to={`/players/${p.id}`} className="debtor-name">
-                  {p.displayName}
-                </Link>
-                <div className="debtor-bar">
-                  <div
-                    className="debtor-bar__fill"
-                    style={{
-                      width: `${(p.currentBalanceCents / maxDebt) * 100}%`,
-                    }}
-                  />
-                </div>
-                <span
-                  style={{
-                    fontSize: "var(--font-sm)",
-                    fontWeight: 600,
-                    color: "var(--danger)",
-                    fontVariantNumeric: "tabular-nums",
-                    minWidth: 70,
-                    textAlign: "right",
-                  }}
-                >
-                  {formatCurrency(p.currentBalanceCents)}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="card">
-          <div className="card-header">
-            <span className="card-header__title">Quick Actions</span>
-          </div>
-          <div className="quick-actions-grid">
-            <button
-              className="quick-action-btn"
-              onClick={() => navigate("/games")}
-            >
-              <Plus size={18} />
-              <span>Create Game</span>
-            </button>
-            <button
-              className="quick-action-btn"
-              onClick={() => navigate("/imports")}
-            >
-              <Upload size={18} />
-              <span>Import CSV</span>
-            </button>
-            <button
-              className="quick-action-btn"
-              onClick={() => navigate("/reconciliation")}
-            >
-              <ArrowRightLeft size={18} />
-              <span>Recon Queue</span>
-            </button>
-            <button
-              className="quick-action-btn"
-              onClick={() => navigate("/players")}
-            >
-              <UserPlus size={18} />
-              <span>Add Player</span>
-            </button>
+              <button
+                className="quick-action-btn"
+                onClick={() => navigate("/games")}
+              >
+                <Plus size={18} />
+                <span>Create Game</span>
+              </button>
+              <button
+                className="quick-action-btn"
+                onClick={() => navigate("/imports")}
+              >
+                <Upload size={18} />
+                <span>Import CSV</span>
+              </button>
+              <button
+                className="quick-action-btn"
+                onClick={() => navigate("/reconciliation")}
+              >
+                <ArrowRightLeft size={18} />
+                <span>Recon Queue</span>
+              </button>
+              <button
+                className="quick-action-btn"
+                onClick={() => navigate("/players")}
+              >
+                <UserPlus size={18} />
+                <span>Add Player</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
