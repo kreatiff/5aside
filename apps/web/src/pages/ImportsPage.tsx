@@ -339,6 +339,11 @@ export const ImportsPage = () => {
                                       ? "Include this transaction"
                                       : "Exclude this transaction"
                                   }
+                                  aria-label={
+                                    isDiscarded
+                                      ? `Include transaction: ${row.descriptionRaw}`
+                                      : `Exclude transaction: ${row.descriptionRaw}`
+                                  }
                                   style={{ padding: "2px 4px" }}
                                 >
                                   {isDiscarded ? (
@@ -416,6 +421,7 @@ export const ImportsPage = () => {
                 className="btn btn-outline btn-sm btn-icon"
                 onClick={handleCopyWebhookUrl}
                 title="Copy URL"
+                aria-label="Copy webhook URL"
               >
                 <Copy size={16} />
               </button>

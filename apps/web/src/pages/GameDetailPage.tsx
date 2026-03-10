@@ -364,6 +364,7 @@ export const GameDetailPage = () => {
               )}
               <button
                 className="btn btn-ghost btn-icon btn-danger"
+                aria-label={`Remove ${att.displayName} from game`}
                 title="Remove player from game"
                 onClick={() => removePlayerMutation.mutate(att.id)}
                 disabled={removePlayerMutation.isPending}
