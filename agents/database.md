@@ -3,12 +3,15 @@
 This file outlines the database conventions, tooling, and data model logic to adhere to when modifying database migrations or writing queries in `apps/api/src/db/`.
 
 ## Tooling
+
 - **Database Engine:** PostgreSQL
 - **Migrations:** Managed via `node-pg-migrate` (files exist in `apps/api/migrations/`).
 - **Data Access:** No ORMs (e.g., Prisma, TypeORM, Sequelize) are permitted in this project. All queries must use raw, parameterized SQL via the project's custom `query<T>()` utility.
 
 ## Key Tables
+
 Below are the critical tables forming the data model for the application:
+
 - `admins`
 - `admin_refresh_tokens`
 - `players`
@@ -25,6 +28,7 @@ Below are the critical tables forming the data model for the application:
 ## Mandatory Data Conventions
 
 ### No Floating Points
+
 - **Strictly use integer cents.** This applies to any column storing monetary values, including:
   - `games.fee_cents`
   - `players.current_balance_cents`
@@ -32,9 +36,11 @@ Below are the critical tables forming the data model for the application:
   - Values processed in `ledger_entries` and `bank_transactions`
 
 ### Timestamp Conventions
+
 - **Strictly store times in UTC.** Do not save localized times in the database.
 
 ## Critical Data Handling Rules
+
 - **Game Fee Snapshots:**
   - `settings.current_game_fee_cents` is a default, only referenced when inserting a new row into `games`.
   - The value must be copied to `games.fee_cents`.
@@ -42,3 +48,4 @@ Below are the critical tables forming the data model for the application:
 - **Ledger & Balances:**
   - A player's cached balance in `players.current_balance_cents` is merely the aggregate sum of their `ledger_entries`.
   - When writing adjustments, payments, or charges, ensure the ledger entry directly references the relevant IDs (player ID, game ID, etc.).
+- **Manual Adjustments:** The `POST /api/transactions/manual` endpoint creates a `bank_transactions` record and (optionally) a `ledger_entries` record atomically. The `source_ref` for these is set to `'manual'`.

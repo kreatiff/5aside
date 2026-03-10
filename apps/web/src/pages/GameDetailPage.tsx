@@ -652,7 +652,7 @@ export const GameDetailPage = () => {
       <div className="card mt-md">
         <div className="card-header">
           <h3 className="card-header__title">
-            "Yes" Attendees (
+            Attendees (
             {game.attendance?.filter((a) => a.chargeable).length || 0})
           </h3>
           <button

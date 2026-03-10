@@ -23,6 +23,9 @@ import {
   formatDateTime,
   parseDateToTimestamp,
 } from "../utils/format";
+import { useSearchParams } from "react-router-dom";
+import { Drawer } from "../components/Drawer";
+import { ManualAdjustmentForm } from "../components/ManualAdjustmentForm";
 
 type PlayerDetails = {
   id: string;
@@ -88,6 +91,8 @@ export const PlayerDetailPage = () => {
     gameId: string | null | undefined;
   } | null>(null);
   const [confirmUndoId, setConfirmUndoId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isAdjustmentOpen = searchParams.get("adjustment") === "true";
 
   const { data: allPlayers } = useQuery({
     queryKey: ["players-all"],
@@ -387,29 +392,41 @@ export const PlayerDetailPage = () => {
           { label: "Players", to: "/players" },
           { label: player.displayName },
         ]}
-        description={`Added ${formatDateTime(player.createdAt)}`}
+        description={
+          <div className="flex-align gap-md mt-xs">
+            <StatusBadge
+              variant={player.active ? "success" : "neutral"}
+              dot
+              pulse={player.active}
+            >
+              {player.active ? "Active" : "Inactive"}
+            </StatusBadge>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() =>
+                updatePlayerMutation.mutate({ active: !player.active })
+              }
+              disabled={updatePlayerMutation.isPending}
+              style={{ padding: 0, height: 'auto', minWidth: 0, fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', textDecoration: 'underline' }}
+            >
+              {player.active ? "Deactivate" : "Activate"}
+            </button>
+          </div>
+        }
         actions={
-          <div className="flex-between gap-md">
-            <div>
-              <StatusBadge
-                variant={player.active ? "success" : "neutral"}
-                dot
-                pulse={player.active}
-              >
-                {player.active ? "Active" : "Inactive"}
-              </StatusBadge>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() =>
-                  updatePlayerMutation.mutate({ active: !player.active })
-                }
-                disabled={updatePlayerMutation.isPending}
-              >
-                {player.active ? "Deactivate" : "Activate"}
-              </button>
-            </div>
-            <div>
-              <span className="text-muted">Current Balance</span>
+          <div className="flex-align gap-lg">
+                        <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setSearchParams({ adjustment: "true", playerId: id!, locked: "true" })}
+              style={{ height: '36px' }}
+            >
+              <Plus size={14} style={{ marginRight: "0.25rem" }} />
+              Add Adjustment
+            </button>
+            <div className="flex-col" style={{ alignItems: 'flex-end', textAlign: 'right' }}>
+              <span className="text-muted" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                Current Balance
+              </span>
               <CurrencyDisplay
                 cents={player.currentBalanceCents}
                 size="xl"
@@ -418,8 +435,8 @@ export const PlayerDetailPage = () => {
               />
               {cutoffDate && (
                 <p
-                  className="text-muted text-sm"
-                  style={{ marginTop: "0.25rem" }}
+                  className="text-muted"
+                  style={{ fontSize: '10px', marginTop: '2px', marginBottom: 0 }}
                 >
                   From {formatDate(cutoffDate)} onwards
                 </p>
@@ -856,6 +873,18 @@ export const PlayerDetailPage = () => {
           </p>
         </div>
       </Modal>
+
+      <Drawer
+        isOpen={isAdjustmentOpen}
+        onClose={() => setSearchParams({})}
+        title="Manual Adjustment"
+      >
+        <ManualAdjustmentForm onSuccess={() => {
+          setSearchParams({});
+          queryClient.invalidateQueries({ queryKey: ["players", id] });
+          queryClient.invalidateQueries({ queryKey: ["players", id, "ledger"] });
+        }} />
+      </Drawer>
     </>
   );
 };

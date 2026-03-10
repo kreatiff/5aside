@@ -26,6 +26,9 @@ function AnimatedValue({ value }: { value: MotionValue<string> }) {
   const ref = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
+    if (ref.current) {
+      ref.current.textContent = value.get();
+    }
     const unsubscribe = value.on("change", (v) => {
       if (ref.current) ref.current.textContent = v;
     });

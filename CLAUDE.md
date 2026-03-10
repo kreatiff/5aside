@@ -6,7 +6,7 @@ Admin-only attendance/payment reconciliation app for a 5-a-side football league.
 Single-tenant, single-currency, admin-only (no player self-service in v1).
 
 Features: player management, game attendance tracking, bank CSV/webhook imports, Facebook webhook
-imports, reconciliation queue, ledger-based accounting, per-game fee snapshots, dashboard.
+imports, manual ledger adjustments, slide-out manual transaction drawer, reconciliation queue, ledger-based accounting, per-game fee snapshots, dashboard.
 
 ---
 
@@ -101,6 +101,7 @@ npm run db:create-admin
 - Auth state in `src/contexts/AuthContext.tsx` — JWT stored in a module variable, not localStorage.
 - Axios client in `src/lib/api.ts` — intercepts 401 → silent refresh → retry.
 - `ProtectedRoute` wraps all authenticated routes in `src/router.tsx`.
+- **UI Components:** Reusable `Drawer.tsx` for slide-out panels and `ManualAdjustmentForm.tsx` for transaction entry.
 
 ### Shared Packages
 
@@ -206,6 +207,7 @@ GET   /api/reconciliation-queue            auth
 POST  /api/reconciliation-queue/:id/resolve auth
 
 POST  /api/ledger/adjustments              auth
+POST  /api/transactions/manual            auth  (atomic bank_txn + ledger)
 
 GET   /api/settings                        auth
 PATCH /api/settings/game-fee               auth  (also writes fee_change_log)

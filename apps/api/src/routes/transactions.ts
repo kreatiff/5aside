@@ -62,4 +62,61 @@ export async function transactionRoutes(app: FastifyInstance) {
       })),
     };
   });
+  
+  app.post("/api/transactions/manual", async (request, reply) => {
+    const { ManualTransactionCreateSchema } = await import("@fiveaside/contracts");
+    const { parseBody } = await import("../utils/request.js");
+    const { withTransaction } = await import("../db/helpers.js");
+    const { insertLedgerEntry } = await import("../services/ledger.js");
+    
+    const body = parseBody(reply, ManualTransactionCreateSchema, request.body);
+    
+    const isOutgoing = body.direction === "outgoing";
+    const venueCategory = (body.paymentType === "game_fee" || body.paymentType === "equipment") 
+      ? (body.paymentType === "game_fee" ? "game_fees" : "equipment") 
+      : null;
+    
+    let description = body.description || `Manual ${body.paymentType} ${body.direction}`;
+    
+    await withTransaction(async (client) => {
+      // 1. Insert into bank_transactions
+      const btResult = await client.query<{ id: string }>(
+        `INSERT INTO bank_transactions (
+          posted_at_utc, 
+          amount_cents, 
+          description_raw, 
+          source_ref, 
+          is_outgoing, 
+          venue_category
+        ) VALUES ($1, $2, $3, 'manual', $4, $5)
+        RETURNING id`,
+        [body.date, body.amountCents, description, isOutgoing, venueCategory]
+      );
+      
+      const bankTransactionId = btResult.rows[0]!.id;
+      
+      // 2. If it's a player payment, record in ledger
+      if (body.paymentType === "player") {
+        if (!body.playerId) {
+          throw new Error("playerId is required for player payments");
+        }
+        
+        // Incoming payment (player paying) reduces balance (negative)
+        // Outgoing payment (refund to player) increases balance (positive)
+        const ledgerAmount = isOutgoing ? body.amountCents : -body.amountCents;
+        
+        await insertLedgerEntry(client, {
+          playerId: body.playerId,
+          type: "payment",
+          amountCents: ledgerAmount,
+          bankTransactionId,
+          adjustmentReason: body.description || `Manual ${body.direction} payment`,
+          createdAt: body.date
+        });
+      }
+    });
+
+    reply.code(201);
+    return { ok: true };
+  });
 }

@@ -25,6 +25,7 @@
   --primary-50: rgba(15, 76, 58, 0.05);
   --primary-100: rgba(15, 76, 58, 0.1);
   --primary-200: rgba(15, 76, 58, 0.2);
+  --primary-deep-green: #06402B;
   --accent-gold: #c1a661;
 
   --danger: #8c2a2a;
@@ -271,7 +272,20 @@ button {
 }
 
 .btn-primary:active {
-  transform: scale(0.98);
+  transform: translateY(0);
+}
+
+.btn-forest {
+  background-color: var(--primary-deep-green);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  border-radius: 2px;
+  transition: opacity 0.2s;
+}
+
+.btn-forest:hover {
+  opacity: 0.9;
 }
 
 .btn-danger {
@@ -834,8 +848,9 @@ input[type="checkbox"] {
 }
 
 .badge-success {
-  background-color: var(--success-100);
-  color: var(--success);
+  background-color: #E8F5E9;
+  color: #2E7D32;
+  border: 1px solid rgba(46, 125, 50, 0.1);
 }
 
 .badge-danger {
@@ -861,7 +876,7 @@ input[type="checkbox"] {
 .badge-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: 2px; /* Square dots as per screenshot */
   background-color: currentColor;
 }
 
@@ -1286,8 +1301,8 @@ input[type="checkbox"] {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(10, 15, 30, 0.8);
-  backdrop-filter: blur(4px);
+  background-color: rgb(39 45 43 / 85%);
+  backdrop-filter: blur(1px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1800,10 +1815,26 @@ input[type="checkbox"] {
   gap: var(--spacing-md);
 }
 
+.flex-align {
+  display: flex;
+  align-items: center;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .flex-between {
   display: flex;
   align-items: center;
-  /*justify-content: space-between;*/
+  justify-content: space-between;
 }
 
 .gap-sm {

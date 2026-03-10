@@ -50,6 +50,9 @@ Backend/API
   - POST /api/auth/refresh
   - POST /api/auth/logout
   - Added JWT-backed MFA token flow and refresh-token rotation/revocation via `admin_refresh_tokens` plus secure refresh cookie handling.
+- Implemented Manual Transaction Adjustments:
+  - POST /api/transactions/manual
+  - Atomic recording of venue expenses and player payments/refunds.
 
 Validation and Tests
 
@@ -127,6 +130,7 @@ GET /api/reconciliation-queue
 POST /api/reconciliation-queue/:id/resolve
 Ledger/Adjustments
 POST /api/ledger/adjustments
+POST /api/transactions/manual
 Settings
 GET /api/settings
 PATCH /api/settings/game-fee (writes settings + fee_change_log)
@@ -149,6 +153,7 @@ Players list/profile/aliases/balance history
 Games list/detail with visible per-game fee
 Imports center (CSV + webhook status + history)
 Reconciliation queue
+Transactions page with manual adjustment Drawer
 Settings page with global fee and fee-change history
 Agent Workstreams (Parallel)
 A: DB schema/migrations + shared Zod contracts

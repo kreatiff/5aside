@@ -3,6 +3,7 @@
 This file instructs AI agents working on the React/Vite admin application in `apps/web/`.
 
 ## Stack
+
 - React 19
 - Vite 7
 - React Router 7
@@ -10,6 +11,7 @@ This file instructs AI agents working on the React/Vite admin application in `ap
 - Axios
 
 ## Architecture & Layout
+
 - **Page-per-route:** Defined in `src/pages/`.
 - **Shared Layout:** Core layout components exist in `src/components/Layout.tsx`.
 - **Auth Context:** Found in `src/contexts/AuthContext.tsx`. Note: JWT is explicitly stored in a module variable—**not** `localStorage`.
@@ -17,8 +19,12 @@ This file instructs AI agents working on the React/Vite admin application in `ap
 - **API Client:** Use the Axios instance set up in `src/lib/api.ts`.
   - It handles intercepting 401s, silently retrieving a new refresh token, and retrying the request.
   - Do NOT manually implement retry logic in individual fetch calls.
+- **Common Components:**
+  - `Drawer.tsx`: Use for slide-out panels (e.g., manual adjustments).
+  - `ManualAdjustmentForm.tsx`: Reusable form for recording manual transactions.
 
 ## Displaying Data
+
 - **Time/Dates:** Although the backend database stores all timestamps in UTC, the frontend is responsible for displaying all dates/times in the configured **local app timezone**.
 - **Monetary Values:** Ensure you format integer cents (returned by the API) appropriately as readable currency (e.g., dividing by 100 before rendering).
 
@@ -36,6 +42,7 @@ Motion: Use animations for effects and micro-interactions. Prioritize CSS-only s
 Backgrounds: Create atmosphere and depth rather than defaulting to solid colors. Layer CSS gradients, use geometric patterns, or add contextual effects that match the overall aesthetic.
 
 Avoid generic AI-generated aesthetics:
+
 - Overused font families (Inter, Roboto, Arial, system fonts)
 - Clichéd color schemes (particularly purple gradients on white backgrounds)
 - Predictable layouts and component patterns

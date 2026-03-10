@@ -123,6 +123,16 @@ export const AdjustmentCreateSchema = z.object({
 });
 export type AdjustmentCreateInput = z.infer<typeof AdjustmentCreateSchema>;
 
+export const ManualTransactionCreateSchema = z.object({
+  paymentType: z.enum(["player", "game_fee", "equipment"]),
+  direction: z.enum(["incoming", "outgoing"]),
+  amountCents: z.number().int().positive(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  playerId: z.string().uuid().optional(),
+  description: z.string().optional()
+});
+export type ManualTransactionCreateInput = z.infer<typeof ManualTransactionCreateSchema>;
+
 export const VenueExpenseCategorySchema = z.enum(["game_fees", "equipment"]);
 export type VenueExpenseCategory = z.infer<typeof VenueExpenseCategorySchema>;
 

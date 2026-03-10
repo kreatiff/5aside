@@ -7,7 +7,11 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { DataTable, type Column } from "../components/DataTable";
 import { Modal } from "../components/Modal";
+import { Drawer } from "../components/Drawer";
+import { ManualAdjustmentForm } from "../components/ManualAdjustmentForm";
 import { formatCurrency, formatDate } from "../utils/format";
+import { useSearchParams } from "react-router-dom";
+import { Plus } from "lucide-react";
 
 type BankTransaction = {
   id: string;
@@ -27,6 +31,8 @@ export const TransactionsPage = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isAdjustmentOpen = searchParams.get("adjustment") === "true";
 
   const { data, isLoading } = useQuery({
     queryKey: ["bank-transactions"],
@@ -162,14 +168,23 @@ export const TransactionsPage = () => {
         title="Bank Transactions"
         description="All imported bank transactions and their matched players."
         actions={
-          <button className="btn btn-primary" onClick={handleSync}>
-            <RefreshCw
-              size={16}
-              className={isSyncing ? "spin-animation" : ""}
-              style={{ marginRight: "0.5rem" }}
-            />
-            Sync from Bank
-          </button>
+          <div className="flex gap-sm">
+            <button
+              className="btn btn-outline"
+              onClick={() => setSearchParams({ adjustment: "true" })}
+            >
+              <Plus size={16} style={{ marginRight: "0.5rem" }} />
+              Create Adjustment
+            </button>
+            <button className="btn btn-primary" onClick={handleSync}>
+              <RefreshCw
+                size={16}
+                className={isSyncing ? "spin-animation" : ""}
+                style={{ marginRight: "0.5rem" }}
+              />
+              Sync from Bank
+            </button>
+          </div>
         }
       />
 
@@ -245,6 +260,14 @@ export const TransactionsPage = () => {
           )}
         </div>
       </Modal>
+
+      <Drawer
+        isOpen={isAdjustmentOpen}
+        onClose={() => setSearchParams({})}
+        title="Manual Adjustment"
+      >
+        <ManualAdjustmentForm onSuccess={() => setSearchParams({})} />
+      </Drawer>
 
       <style>{`
         .spin-animation {
