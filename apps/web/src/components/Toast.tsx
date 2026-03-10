@@ -26,7 +26,11 @@ export const ToastContainer = () => {
           >
             <span className="toast-icon">{icons[toast.type]}</span>
             <span className="toast-message">{toast.message}</span>
-            <button className="toast-close" onClick={() => removeToast(toast.id)}>
+            <button
+              className="toast-close"
+              onClick={() => removeToast(toast.id)}
+              aria-label="Close notification"
+            >
               <X size={14} />
             </button>
           </motion.div>

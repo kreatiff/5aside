@@ -300,6 +300,7 @@ export const ReconciliationPage = () => {
                 className="btn btn-ghost btn-icon btn-danger"
                 onClick={() => dismissMutation.mutate(item.id)}
                 title="Dismiss / Ignore"
+                aria-label={`Dismiss ${item.itemType === 'bank_transaction' ? 'transaction' : 'attendance'}`}
               >
                 <X size={16} />
               </button>
