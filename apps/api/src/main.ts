@@ -35,8 +35,17 @@ export async function buildServer() {
 
   // Security headers — disable CSP in dev to avoid Vite HMR issues
   await app.register(helmet, {
-    contentSecurityPolicy: env.NODE_ENV === "production" ? undefined : false,
-    crossOriginEmbedderPolicy: env.NODE_ENV === "production"
+    contentSecurityPolicy: env.NODE_ENV === "production" ? {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://static.cloudflareinsights.com"],
+        connectSrc: ["'self'", "https://n8n.dominus.casa"],
+        imgSrc: ["'self'", "data:", "https:"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+        fontSrc: ["'self'", "data:", "https:"],
+      }
+    } : false,
+    crossOriginEmbedderPolicy: false
   });
 
   // Rate limiting — stricter for auth/webhook endpoints via per-route config
