@@ -8,6 +8,8 @@ import { parseBody, parseUuidParam } from "../utils/request.js";
 import { pool } from "../db/pool.js";
 import { z } from "zod";
 import { insertLedgerEntry } from "../services/ledger.js";
+import { applyRetroactiveSplit } from "../services/ledger-rules.js";
+import { recalculateAllBalances } from "../services/balance-recalc.js";
 import { pairPaymentsToCharges, type ChargeEntry, type PaymentEntry } from "../services/payment-pairing.js";
 
 export async function playerRoutes(app: FastifyInstance) {
@@ -106,6 +108,23 @@ export async function playerRoutes(app: FastifyInstance) {
       throw reply.notFound("Player not found");
     }
     return { player: mapPlayer(result.rows[0]!) };
+  });
+
+  app.post("/api/players/:id/retroactive-split", async (request, reply) => {
+    const id = parseUuidParam(request, reply, "id");
+    
+    const result = await withTransaction(async (client) => {
+      return await applyRetroactiveSplit(client, id, recalculateAllBalances);
+    });
+
+    if (result.error) {
+      throw app.httpErrors.badRequest(result.error);
+    }
+
+    return { 
+      success: true, 
+      appliedCount: result.appliedCount 
+    };
   });
 
   app.patch("/api/players/:id", async (request, reply) => {

@@ -6,6 +6,7 @@ import { query, withTransaction } from "../db/helpers.js";
 import { parseBody, parseUuidParam } from "../utils/request.js";
 import { toIso } from "../utils/mappers.js";
 import { insertLedgerEntry } from "../services/ledger.js";
+import { processPaymentWithRules } from "../services/ledger-rules.js";
 import { rescanAllPendingTransactions } from "../services/bank-import.js";
 
 export async function reconciliationRoutes(app: FastifyInstance) {
@@ -193,12 +194,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
           throw app.httpErrors.notFound("Bank transaction not found for queue item");
         }
 
-        await insertLedgerEntry(client, {
-          playerId: body.playerId,
-          type: "payment",
-          amountCents: -transaction.rows[0]!.amount_cents,
-          bankTransactionId: item.source_record_id
-        });
+        await processPaymentWithRules(client, body.playerId, transaction.rows[0]!.amount_cents, item.source_record_id);
       }
 
       await client.query(

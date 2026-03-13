@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { matchPlayerByAlias, isChargeableStatus, type MatchCandidate } from "@fiveaside/recon";
 import { insertLedgerEntry } from "./ledger.js";
+import { processPaymentWithRules } from "./ledger-rules.js";
 
 type ProcessBankRowInput = {
   externalTxnId?: string;
@@ -72,12 +73,7 @@ export async function processBankRows(client: PoolClient, rows: ProcessBankRowIn
       continue;
     }
 
-    await insertLedgerEntry(client, {
-      playerId: match.playerId,
-      type: "payment",
-      amountCents: -row.amountCents,
-      bankTransactionId
-    });
+    await processPaymentWithRules(client, match.playerId, row.amountCents, bankTransactionId);
   }
 
   return { posted, queued };
@@ -126,12 +122,7 @@ export async function rescanPendingTransactionsForPlayer(client: PoolClient, pla
   for (const item of bankItems.rows) {
     const match = matchPlayerByAlias(item.description_raw, candidates);
     if (match.matched && match.playerId === playerId) {
-      await insertLedgerEntry(client, {
-        playerId,
-        type: "payment",
-        amountCents: -item.amount_cents,
-        bankTransactionId: item.source_record_id
-      });
+      await processPaymentWithRules(client, playerId, item.amount_cents, item.source_record_id);
 
       await client.query(
         `UPDATE reconciliation_queue 
@@ -268,12 +259,7 @@ export async function rescanAllPendingTransactions(client: PoolClient) {
     }
 
     if (match.matched && match.playerId) {
-      await insertLedgerEntry(client, {
-        playerId: match.playerId,
-        type: "payment",
-        amountCents: -item.amount_cents,
-        bankTransactionId: item.source_record_id
-      });
+      await processPaymentWithRules(client, match.playerId, item.amount_cents, item.source_record_id);
 
       await client.query(
         `UPDATE reconciliation_queue 

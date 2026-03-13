@@ -11,6 +11,7 @@ import {
   ChevronRight,
   DollarSign,
   Undo,
+  RefreshCcw,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
@@ -30,6 +31,7 @@ import { ManualAdjustmentForm } from "../components/ManualAdjustmentForm";
 type PlayerDetails = {
   id: string;
   displayName: string;
+  notes: string | null;
   createdAt: string;
   currentBalanceCents: number;
   active: boolean;
@@ -76,10 +78,8 @@ function ledgerDetails(entry: LedgerEntry): string {
 export const PlayerDetailPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
-  const { addToast } = useToast();
-  const [mergeSelection, setMergeSelection] = useState<string[]>([]);
-  const [showConfirmMerge, setShowConfirmMerge] = useState(false);
-  const [showMergePanel, setShowMergePanel] = useState(false);
+  const [notesDraft, setNotesDraft] = useState("");
+  const [showNotesPanel, setShowNotesPanel] = useState(true);
   const [showAliasesPanel, setShowAliasesPanel] = useState(false);
   const [showAliasModal, setShowAliasModal] = useState(false);
   const [aliasInput, setAliasInput] = useState("");
@@ -110,6 +110,9 @@ export const PlayerDetailPage = () => {
       const { data } = await api.get<{ player: PlayerDetails }>(
         `/players/${id}`,
       );
+      if (data.player.notes) {
+        setNotesDraft(data.player.notes);
+      }
       return data.player;
     },
   });
@@ -188,8 +191,32 @@ export const PlayerDetailPage = () => {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["players", id] });
-      const newStatus = variables.active ? "active" : "inactive";
-      addToast("success", `Player marked as ${newStatus}`);
+      if (variables.notes !== undefined) {
+        addToast("success", "Notes updated successfully");
+      }
+    },
+  });
+
+  const retroactiveSplitMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{ success: true; appliedCount: number }>(
+        `/players/${id}/retroactive-split`,
+      );
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["players", id] });
+      queryClient.invalidateQueries({ queryKey: ["players", id, "ledger"] });
+      addToast(
+        "success",
+        `Retroactively applied split rule to ${data.appliedCount} transaction${data.appliedCount === 1 ? "" : "s"}`,
+      );
+    },
+    onError: (error: any) => {
+      addToast(
+        "error",
+        error.response?.data?.message || "Failed to apply retroactive split",
+      );
     },
   });
 
@@ -415,7 +442,19 @@ export const PlayerDetailPage = () => {
         }
         actions={
           <div className="flex-align gap-lg">
-                        <button
+                        {player.notes && /\[AUTO_PAY_FOR:\s*([a-fA-F0-9-]{36})\]/.test(player.notes) && (
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => retroactiveSplitMutation.mutate()}
+                disabled={retroactiveSplitMutation.isPending}
+                style={{ height: '36px' }}
+                title="Search and split existing 2x payments"
+              >
+                <RefreshCcw size={14} style={{ marginRight: "0.25rem" }} className={retroactiveSplitMutation.isPending ? "animate-spin" : ""} />
+                Run Retroactive Split
+              </button>
+            )}
+            <button
               className="btn btn-primary btn-sm"
               onClick={() => setSearchParams({ adjustment: "true", playerId: id!, locked: "true" })}
               style={{ height: '36px' }}
@@ -447,19 +486,19 @@ export const PlayerDetailPage = () => {
       />
 
       <div className="grid-2 gap-md mb-lg">
-        {/* Merge Controls */}
+        {/* Player Notes */}
         <div className="card">
           <div
             className="card-header cursor-pointer m-0"
             style={{
               cursor: "pointer",
-              paddingBottom: showMergePanel ? "var(--spacing-md)" : "0",
-              marginBottom: showMergePanel ? "var(--spacing-md)" : "0",
-              borderBottom: showMergePanel
+              paddingBottom: showNotesPanel ? "var(--spacing-md)" : "0",
+              marginBottom: showNotesPanel ? "var(--spacing-md)" : "0",
+              borderBottom: showNotesPanel
                 ? "1px solid var(--border-subtle)"
                 : "none",
             }}
-            onClick={() => setShowMergePanel(!showMergePanel)}
+            onClick={() => setShowNotesPanel(!showNotesPanel)}
           >
             <div
               className="flex-align gap-sm"
@@ -469,7 +508,7 @@ export const PlayerDetailPage = () => {
                 gap: "var(--spacing-sm)",
               }}
             >
-              {showMergePanel ? (
+              {showNotesPanel ? (
                 <ChevronDown size={20} className="text-muted" />
               ) : (
                 <ChevronRight size={20} className="text-muted" />
@@ -478,107 +517,42 @@ export const PlayerDetailPage = () => {
                 className="card-header__title m-0"
                 style={{ marginBottom: 0 }}
               >
-                Merge Duplicate Profiles
+                Internal Player Notes
               </h4>
             </div>
+            {showNotesPanel && (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updatePlayerMutation.mutate({ notes: notesDraft });
+                }}
+                disabled={updatePlayerMutation.isPending || notesDraft === player.notes}
+              >
+                Save Notes
+              </button>
+            )}
           </div>
 
-          {showMergePanel && (
-            <div className="fadeIn">
-              <p className="text-muted mb-md">
-                Select duplicates from the list below to merge into this
-                profile. The selected profiles will be permanently deleted and
-                all of their ledgers, aliases, and attendance records will be
-                cleanly transferred here.
+          {showNotesPanel && (
+            <div className="fadeIn p-md pt-0">
+              <p className="text-muted mb-sm text-sm">
+                Use this section for internal tracking. To enable automated payments, 
+                add the tag <code>[AUTO_PAY_FOR: PLAYER_UUID]</code>.
               </p>
-              <div className="flex-between gap-md">
-                <div className="merge-candidates-list">
-                  {mergeCandidates.map((p) => (
-                    <label key={p.id} className="merge-candidate-label">
-                      <input
-                        type="checkbox"
-                        checked={mergeSelection.includes(p.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setMergeSelection([...mergeSelection, p.id]);
-                          } else {
-                            setMergeSelection(
-                              mergeSelection.filter(
-                                (selectedId) => selectedId !== p.id,
-                              ),
-                            );
-                          }
-                        }}
-                        disabled={mergeMutation.isPending}
-                      />
-                      {p.displayName}
-                    </label>
-                  ))}
-                </div>
-                <div className="merge-actions">
-                  {!showConfirmMerge ? (
-                    <button
-                      className="btn btn-primary"
-                      disabled={mergeMutation.isPending}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (mergeSelection.length === 0) {
-                          addToast(
-                            "error",
-                            "Please select at least one duplicate profile from the list to merge.",
-                          );
-                          return;
-                        }
-                        setShowConfirmMerge(true);
-                      }}
-                    >
-                      Merge {mergeSelection.length} Profile
-                      {mergeSelection.length !== 1 ? "s" : ""}
-                    </button>
-                  ) : (
-                    <div className="gap-sm">
-                      <p className="text-danger mb-md">
-                        <strong>Are you absolutely sure?</strong>
-                      </p>
-                      <button
-                        className="btn btn-danger"
-                        disabled={mergeMutation.isPending}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          mergeMutation.mutate({
-                            sourcePlayerIds: mergeSelection,
-                            targetPlayerId: id!,
-                          });
-                        }}
-                      >
-                        Yes, Delete &amp; Merge
-                      </button>
-                      <button
-                        className="btn btn-outline"
-                        disabled={mergeMutation.isPending}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setShowConfirmMerge(false);
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-
-                  {!showConfirmMerge && (
-                    <button
-                      className="btn btn-outline"
-                      disabled={
-                        mergeSelection.length === 0 || mergeMutation.isPending
-                      }
-                      onClick={() => setMergeSelection([])}
-                    >
-                      Clear Selection
-                    </button>
-                  )}
-                </div>
-              </div>
+              <textarea
+                className="input-field"
+                style={{ 
+                  minHeight: "120px", 
+                  width: "100%", 
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                  fontSize: "var(--font-sm)"
+                }}
+                placeholder="Add private notes about this player..."
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+              />
             </div>
           )}
         </div>
