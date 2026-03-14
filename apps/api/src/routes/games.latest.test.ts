@@ -39,6 +39,7 @@ describe('Games Routes - Latest Unpaid', () => {
         vi.spyOn(gamesService, 'getLatestGameId').mockResolvedValue('latest-game-id');
         vi.spyOn(gamesService, 'calculateGamePaymentStatus').mockResolvedValue({
             gameId: 'latest-game-id',
+            gameDate: '2026-03-01',
             feeCents: 1000,
             playerStatuses: [
                 { playerId: 'p1', displayName: 'Paid', chargeCents: 1000, paidCents: 1000, status: 'paid' },
@@ -50,6 +51,7 @@ describe('Games Routes - Latest Unpaid', () => {
 
         const result = await handler({}, {});
         
+        expect(result.gameDate).toBe('2026-03-01');
         expect(result.data).toHaveLength(2);
         expect(result.data.map((p: any) => p.playerId)).toContain('p2');
         expect(result.data.map((p: any) => p.playerId)).toContain('p3');

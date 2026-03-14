@@ -11,6 +11,7 @@ export type PlayerPaymentStatus = {
 
 export type GamePaymentStatusResponse = {
   gameId: string;
+  gameDate: string;
   feeCents: number;
   playerStatuses: PlayerPaymentStatus[];
   summary: {
@@ -24,14 +25,15 @@ export type GamePaymentStatusResponse = {
 
 export async function calculateGamePaymentStatus(gameId: string): Promise<GamePaymentStatusResponse> {
   // Fetch game info
-  const gameResult = await query<{ fee_cents: number; status: string }>(
-    `SELECT fee_cents, status FROM games WHERE id = $1`,
+  const gameResult = await query<{ fee_cents: number; status: string; game_date: string }>(
+    `SELECT fee_cents, status, game_date::text FROM games WHERE id = $1`,
     [gameId]
   );
   if (gameResult.rowCount === 0) {
     throw new Error("Game not found");
   }
   const feeCents = gameResult.rows[0]!.fee_cents;
+  const gameDate = gameResult.rows[0]!.game_date;
 
   // Get cutoff date
   const settingsResult = await query<{ cutoff_date: string | null }>(
@@ -55,6 +57,7 @@ export async function calculateGamePaymentStatus(gameId: string): Promise<GamePa
   if (attendeesResult.rows.length === 0) {
     return {
       gameId,
+      gameDate,
       feeCents,
       playerStatuses: [],
       summary: { totalExpectedCents: 0, totalPaidCents: 0, paidCount: 0, partialCount: 0, unpaidCount: 0 },
@@ -156,7 +159,7 @@ export async function calculateGamePaymentStatus(gameId: string): Promise<GamePa
     unpaidCount: playerStatuses.filter((p) => p.status === "unpaid").length,
   };
 
-  return { gameId, feeCents, playerStatuses, summary };
+  return { gameId, gameDate, feeCents, playerStatuses, summary };
 }
 
 export async function getLatestGameId(): Promise<string | null> {

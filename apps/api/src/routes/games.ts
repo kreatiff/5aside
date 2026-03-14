@@ -556,10 +556,10 @@ export async function gameRoutes(app: FastifyInstance) {
       return { data: [] };
     }
 
-    const { playerStatuses } = await calculateGamePaymentStatus(gameId);
+    const { playerStatuses, gameDate } = await calculateGamePaymentStatus(gameId);
     const unpaidPlayers = playerStatuses.filter((p) => p.status !== "paid");
 
-    return { data: unpaidPlayers };
+    return { gameDate, data: unpaidPlayers };
   });
 
   // ── Manual attendance: remove a player ───────────────────────────────────

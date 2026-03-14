@@ -14,7 +14,7 @@ describe("games service", () => {
       // Mock game fee
       (query as any).mockResolvedValueOnce({
         rowCount: 1,
-        rows: [{ fee_cents: 1000, status: "synced" }],
+        rows: [{ fee_cents: 1000, status: "synced", game_date: "2026-03-01" }],
       });
 
       // Mock cutoff date
@@ -45,6 +45,7 @@ describe("games service", () => {
       const result = await calculateGamePaymentStatus(gameId);
 
       expect(result.gameId).toBe(gameId);
+      expect(result.gameDate).toBe("2026-03-01");
       expect(result.feeCents).toBe(1000);
       expect(result.playerStatuses).toHaveLength(2);
       
