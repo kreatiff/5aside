@@ -9,6 +9,7 @@ import { insertLedgerEntry } from "../services/ledger.js";
 import { extractFacebookEventId } from "../utils/facebook.js";
 import { generateGameDates } from "../utils/dates.js";
 import { pairPaymentsToCharges, type ChargeEntry, type PaymentEntry } from "../services/payment-pairing.js";
+import { calculateGamePaymentStatus, getLatestGameId } from "../services/games.js";
 
 const GAME_COLS = `id, external_event_id, facebook_event_url, game_date, kickoff_at_utc, fee_cents, venue_fee_cents, source, status, created_at, updated_at`;
 
@@ -545,141 +546,20 @@ export async function gameRoutes(app: FastifyInstance) {
   // ── Payment status per game ──────────────────────────────────────────────
   app.get("/api/games/:id/payment-status", async (request, reply) => {
     const gameId = parseUuidParam(request, reply, "id");
+    return calculateGamePaymentStatus(gameId);
+  });
 
-    // Fetch game info
-    const gameResult = await query<{ fee_cents: number; status: string }>(
-      `SELECT fee_cents, status FROM games WHERE id = $1`,
-      [gameId]
-    );
-    if (gameResult.rowCount === 0) {
-      throw reply.notFound("Game not found");
-    }
-    const feeCents = gameResult.rows[0]!.fee_cents;
-
-    // Get cutoff date
-    const settingsResult = await query<{ cutoff_date: string | null }>(
-      `SELECT cutoff_date::text FROM settings WHERE id = 1`
-    );
-    const cutoffDate = settingsResult.rows[0]?.cutoff_date?.slice(0, 10) ?? null;
-
-    // Fetch chargeable attendees for this game
-    const attendeesResult = await query<{
-      player_id: string;
-      display_name: string;
-    }>(
-      `SELECT a.player_id, p.display_name
-       FROM attendance a
-       JOIN players p ON p.id = a.player_id
-       WHERE a.game_id = $1 AND a.chargeable = true
-       ORDER BY p.display_name ASC`,
-      [gameId]
-    );
-
-    if (attendeesResult.rows.length === 0) {
-      return {
-        gameId,
-        feeCents,
-        playerStatuses: [],
-        summary: { totalExpectedCents: 0, totalPaidCents: 0, paidCount: 0, partialCount: 0, unpaidCount: 0 },
-      };
+  // ── Unpaid players from latest game ───────────────────────────────────────
+  app.get("/api/games/latest/unpaid", async () => {
+    const gameId = await getLatestGameId();
+    if (!gameId) {
+      return { data: [] };
     }
 
-    const playerIds = attendeesResult.rows.map((r) => r.player_id);
+    const { playerStatuses } = await calculateGamePaymentStatus(gameId);
+    const unpaidPlayers = playerStatuses.filter((p) => p.status !== "paid");
 
-    // Fetch ALL ledger entries for these players (respecting cutoff)
-    const ledgerResult = await query<{
-      player_id: string;
-      type: string;
-      amount_cents: number;
-      game_id: string | null;
-      attendance_id: string | null;
-      created_at: string;
-      game_date: string | null;
-    }>(
-      `SELECT le.player_id, le.type, le.amount_cents, le.game_id, le.attendance_id,
-              le.created_at::text AS created_at, g.game_date::text AS game_date
-       FROM ledger_entries le
-       LEFT JOIN games g ON g.id = le.game_id
-       LEFT JOIN bank_transactions bt ON bt.id = le.bank_transaction_id
-       WHERE le.player_id = ANY($1)
-         AND ($2::date IS NULL OR COALESCE(g.game_date, bt.posted_at_utc::date, le.created_at::date) >= $2)
-       ORDER BY le.created_at ASC`,
-      [playerIds, cutoffDate]
-    );
-
-    // Group by player and run FIFO pairing
-    const chargesByPlayer = new Map<string, ChargeEntry[]>();
-    const paymentsByPlayer = new Map<string, PaymentEntry[]>();
-
-    for (const entry of ledgerResult.rows) {
-      if (entry.type === "charge" && entry.game_id && entry.game_date) {
-        const arr = chargesByPlayer.get(entry.player_id) ?? [];
-        arr.push({
-          gameId: entry.game_id,
-          attendanceId: entry.attendance_id ?? "",
-          playerId: entry.player_id,
-          amountCents: entry.amount_cents,
-          gameDate: entry.game_date,
-        });
-        chargesByPlayer.set(entry.player_id, arr);
-      } else if (entry.type === "payment") {
-        const arr = paymentsByPlayer.get(entry.player_id) ?? [];
-        arr.push({
-          playerId: entry.player_id,
-          amountCents: Math.abs(entry.amount_cents),
-          createdAt: entry.created_at,
-          gameId: entry.game_id,
-        });
-        paymentsByPlayer.set(entry.player_id, arr);
-      } else if (entry.type === "adjustment") {
-        if (entry.amount_cents < 0) {
-          const arr = paymentsByPlayer.get(entry.player_id) ?? [];
-          arr.push({
-            playerId: entry.player_id,
-            amountCents: Math.abs(entry.amount_cents),
-            createdAt: entry.created_at,
-            gameId: entry.game_id,
-          });
-          paymentsByPlayer.set(entry.player_id, arr);
-        } else if (entry.amount_cents > 0) {
-          const arr = chargesByPlayer.get(entry.player_id) ?? [];
-          arr.push({
-            gameId: entry.game_id ?? "",
-            attendanceId: entry.attendance_id ?? "",
-            playerId: entry.player_id,
-            amountCents: entry.amount_cents,
-            gameDate: entry.game_date ?? entry.created_at.slice(0, 10),
-          });
-          chargesByPlayer.set(entry.player_id, arr);
-        }
-      }
-    }
-
-    // Build per-player status
-    const playerStatuses = attendeesResult.rows.map((attendee) => {
-      const charges = chargesByPlayer.get(attendee.player_id) ?? [];
-      const payments = paymentsByPlayer.get(attendee.player_id) ?? [];
-      const pairings = pairPaymentsToCharges(charges, payments);
-
-      const gameMatch = pairings.find((p) => p.gameId === gameId);
-      return {
-        playerId: attendee.player_id,
-        displayName: attendee.display_name,
-        chargeCents: gameMatch?.chargeCents ?? feeCents,
-        paidCents: gameMatch?.paidCents ?? 0,
-        status: gameMatch?.status ?? ("unpaid" as const),
-      };
-    });
-
-    const summary = {
-      totalExpectedCents: playerStatuses.reduce((s, p) => s + p.chargeCents, 0),
-      totalPaidCents: playerStatuses.reduce((s, p) => s + p.paidCents, 0),
-      paidCount: playerStatuses.filter((p) => p.status === "paid").length,
-      partialCount: playerStatuses.filter((p) => p.status === "partial").length,
-      unpaidCount: playerStatuses.filter((p) => p.status === "unpaid").length,
-    };
-
-    return { gameId, feeCents, playerStatuses, summary };
+    return { data: unpaidPlayers };
   });
 
   // ── Manual attendance: remove a player ───────────────────────────────────

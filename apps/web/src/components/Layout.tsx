@@ -12,7 +12,6 @@ import {
   Banknote,
   ArrowRightLeft,
   Settings,
-  LogOut,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -33,97 +32,97 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="M12 0.75A11.25 11.25 0 1 0 23.25 12 11.25 11.25 0 0 0 12 0.75Z"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="m8.895 16.754 -1.91 -5.9L12 7.208l5.015 3.646 -1.91 5.9 -6.21 0z"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="M16.301 1.601 12 4.5 7.699 1.601"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="m14.599 22.948 2.139 -4.366 4.884 -0.75"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="m23.214 12.909 -3.427 -3.413 0.735 -4.839"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="m12 4.5 0 2.708"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="m17.015 10.854 2.772 -1.358"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="m0.786 12.909 3.427 -3.413 -0.735 -4.839"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="M6.985 10.854 4.213 9.496"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="m15.105 16.754 1.633 1.828"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="m9.401 22.948 -2.139 -4.366 -4.884 -0.75"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
     <path
       d="m8.895 16.754 -1.633 1.828"
       fill="none"
       stroke="#000000"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
     ></path>
   </svg>
 );
@@ -139,8 +138,10 @@ const routes = [
   { path: "/settings", name: "Settings", icon: Settings },
 ];
 
+declare const __APP_VERSION__: string;
+
 export const Layout = ({ children }: { children: ReactNode }) => {
-  const { admin, logout } = useAuth();
+  const { admin } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -243,10 +244,6 @@ export const Layout = ({ children }: { children: ReactNode }) => {
               </span>
             </div>
           </div>
-          <button className="nav-item logout-btn" onClick={logout}>
-            <LogOut size={20} />
-            <span>Logout</span>
-          </button>
         </div>
       </aside>
 

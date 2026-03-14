@@ -13,18 +13,12 @@ export const authPlugin = fp(async (app) => {
   });
 
   app.decorate("requireAuth", async (request: FastifyRequest, reply: FastifyReply) => {
-    if (env.DISABLE_AUTH === "true") {
-      request.admin = { id: null, email: "dev@localhost", role: "admin" } as any;
-      return;
-    }
-
-    try {
-      await request.jwtVerify();
-      const user = request.user as any;
-      request.admin = { id: user.sub, email: user.email, role: user.role };
-    } catch (err) {
-      reply.unauthorized("Authentication required");
-    }
+    // Hardcoded admin context for Cloudflare Access (internal auth removed)
+    request.admin = { 
+      id: "00000000-0000-0000-0000-000000000000", // Default UUID
+      email: "admin@5aside.internal", 
+      role: "admin" 
+    } as any;
   });
 });
 

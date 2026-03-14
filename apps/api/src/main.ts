@@ -12,7 +12,6 @@ import { env } from "./config.js";
 import { pool } from "./db/pool.js";
 
 import { authPlugin } from "./middleware/auth.js";
-import { authRoutes } from "./routes/auth.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { adminRoutes } from "./routes/admin.js";
 import { playerRoutes } from "./routes/players.js";
@@ -76,7 +75,6 @@ export async function buildServer() {
 
   await app.register(authPlugin);
 
-  await app.register(authRoutes);
   await app.register(dashboardRoutes);
   await app.register(adminRoutes);
   await app.register(playerRoutes);
