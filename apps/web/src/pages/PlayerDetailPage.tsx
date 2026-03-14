@@ -587,6 +587,7 @@ export const PlayerDetailPage = () => {
                         className="alias-pill__delete"
                         onClick={() => deleteAliasMutation.mutate(alias.id)}
                         title="Remove alias"
+                        aria-label="Remove alias"
                         disabled={deleteAliasMutation.isPending}
                       >
                         <X size={12} />
