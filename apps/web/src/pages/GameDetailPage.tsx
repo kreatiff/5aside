@@ -139,7 +139,11 @@ export const GameDetailPage = () => {
   });
 
   const updateGameMutation = useMutation({
-    mutationFn: async (updates: { feeCents?: number; venueFeeCents?: number; status?: string }) => {
+    mutationFn: async (updates: {
+      feeCents?: number;
+      venueFeeCents?: number;
+      status?: string;
+    }) => {
       await api.patch(`/games/${id}`, updates);
     },
     onSuccess: () => {
@@ -252,21 +256,26 @@ export const GameDetailPage = () => {
     if (!addPlayerId) return;
     addPlayerMutation.mutate();
   };
-  
+
   const handleTextExport = () => {
     if (!game?.attendance || !paymentStatus?.playerStatuses) return;
-    
+
     const formattedDate = formatDate(game.gameDate);
-    const lines = [
-      `Game on ${formattedDate}`,
-      ""
-    ];
+    const lines = [`Outstanding payments from ${formattedDate}`, ""];
 
     game.attendance
-      .filter(att => att.chargeable)
-      .forEach(att => {
-        const ps = paymentStatus.playerStatuses.find(p => p.playerId === att.playerId);
-        let emoji = "❌"; // Default unpaid
+      .filter((att) => att.chargeable)
+      .filter((att) => {
+        const ps = paymentStatus.playerStatuses.find(
+          (p) => p.playerId === att.playerId,
+        );
+        return ps && ps.status !== "paid";
+      })
+      .forEach((att) => {
+        const ps = paymentStatus.playerStatuses.find(
+          (p) => p.playerId === att.playerId,
+        );
+        let emoji = "⏳"; // Default unpaid
         let prefix = "@";
         if (ps) {
           if (ps.status === "paid") {
@@ -281,11 +290,14 @@ export const GameDetailPage = () => {
       });
 
     const text = lines.join("\n");
-    navigator.clipboard.writeText(text).then(() => {
-      addToast("success", "Attendees list copied to clipboard");
-    }).catch(() => {
-      addToast("error", "Failed to copy to clipboard");
-    });
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        addToast("success", "Attendees list copied to clipboard");
+      })
+      .catch(() => {
+        addToast("error", "Failed to copy to clipboard");
+      });
   };
 
   // Players not already in the game
@@ -538,7 +550,13 @@ export const GameDetailPage = () => {
           )}
 
           {/* Venue Fee */}
-          <div style={{ borderTop: "1px solid var(--border-color)", marginTop: "var(--spacing-md)", paddingTop: "var(--spacing-md)" }}>
+          <div
+            style={{
+              borderTop: "1px solid var(--border-color)",
+              marginTop: "var(--spacing-md)",
+              paddingTop: "var(--spacing-md)",
+            }}
+          >
             <span className="text-muted text-sm">Venue Fee</span>
             {isEditingVenueFee ? (
               <div className="flex-between gap-sm mt-xs">
@@ -551,17 +569,27 @@ export const GameDetailPage = () => {
                     onChange={(e) => setVenueFeeInput(e.target.value)}
                   />
                 </div>
-                <button className="btn btn-primary btn-sm" onClick={handleSaveVenueFee}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSaveVenueFee}
+                >
                   <Save size={16} /> Save
                 </button>
-                <button className="btn btn-outline btn-sm" onClick={() => setIsEditingVenueFee(false)}>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setIsEditingVenueFee(false)}
+                >
                   Cancel
                 </button>
               </div>
             ) : (
               <div className="flex-between mt-xs">
                 {game.venueFeeCents != null ? (
-                  <CurrencyDisplay cents={game.venueFeeCents} size="md" colorCode={false} />
+                  <CurrencyDisplay
+                    cents={game.venueFeeCents}
+                    size="md"
+                    colorCode={false}
+                  />
                 ) : (
                   <span className="text-muted">N/A</span>
                 )}
