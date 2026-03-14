@@ -1,1 +1,5 @@
 get-docker.sh
+node_modules/
+dist/
+.env
+dev.log

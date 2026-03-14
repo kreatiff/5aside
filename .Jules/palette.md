@@ -1,0 +1,3 @@
+## 2026-03-14 - Add ARIA Labels to Icon-Only Buttons
+**Learning:** Found several instances of icon-only buttons (`X` to close, `Edit2` to edit, etc.) without accessible text representations for screen readers. Using `title` helps mouse users, but `aria-label` is required for proper accessibility.
+**Action:** Always verify icon-only buttons include an `aria-label` attribute describing their action when creating or modifying UI components.

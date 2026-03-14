@@ -413,6 +413,7 @@ export const GameDetailPage = () => {
               <button
                 className="btn btn-ghost btn-icon btn-danger"
                 title="Remove player from game"
+                aria-label="Remove player from game"
                 onClick={() => removePlayerMutation.mutate(att.id)}
                 disabled={removePlayerMutation.isPending}
               >
@@ -528,6 +529,7 @@ export const GameDetailPage = () => {
               ) : (
                 <button
                   className="btn btn-ghost btn-sm"
+                  aria-label="Edit match fee"
                   onClick={() => {
                     setFeeInput(game.feeCents.toString());
                     setIsEditingFee(true);
