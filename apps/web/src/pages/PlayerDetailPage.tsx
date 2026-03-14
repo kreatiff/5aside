@@ -78,6 +78,7 @@ function ledgerDetails(entry: LedgerEntry): string {
 export const PlayerDetailPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
+  const { addToast } = useToast();
   const [notesDraft, setNotesDraft] = useState("");
   const [showNotesPanel, setShowNotesPanel] = useState(false);
   const [showAliasesPanel, setShowAliasesPanel] = useState(false);
@@ -93,16 +94,6 @@ export const PlayerDetailPage = () => {
   const [confirmUndoId, setConfirmUndoId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdjustmentOpen = searchParams.get("adjustment") === "true";
-
-  const { data: allPlayers } = useQuery({
-    queryKey: ["players-all"],
-    queryFn: async () => {
-      const { data } = await api.get<{ data: PlayerDetails[] }>(
-        `/players?limit=1000`,
-      );
-      return data.data;
-    },
-  });
 
   const { data: player, isLoading } = useQuery({
     queryKey: ["players", id],
@@ -219,25 +210,6 @@ export const PlayerDetailPage = () => {
       );
     },
   });
-
-  const mergeMutation = useMutation({
-    mutationFn: async ({
-      sourcePlayerIds,
-      targetPlayerId,
-    }: {
-      sourcePlayerIds: string[];
-      targetPlayerId: string;
-    }) => {
-      await api.post(`/players/merge`, { sourcePlayerIds, targetPlayerId });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["players"] });
-      setMergeSelection([]);
-      setShowConfirmMerge(false);
-      addToast("success", "Profiles merged successfully");
-    },
-  });
-
   const manualPaymentMutation = useMutation({
     mutationFn: async ({
       amountCents,
@@ -400,8 +372,6 @@ export const PlayerDetailPage = () => {
       return acc;
     }, 0);
   }, [ledger?.data]);
-
-  const mergeCandidates = allPlayers?.filter((p) => p.id !== id) ?? [];
 
   if (isLoading) {
     return <PageHeader title="Loading..." />;
