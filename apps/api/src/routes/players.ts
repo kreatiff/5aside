@@ -35,7 +35,7 @@ export async function playerRoutes(app: FastifyInstance) {
               (SELECT MAX(g.game_date)::text FROM attendance a JOIN games g ON g.id = a.game_id WHERE a.player_id = p.id AND a.chargeable = true AND ($3::date IS NULL OR g.game_date >= $3)) AS last_game_date
        FROM players p
        ${whereClause}
-       ORDER BY p.display_name ASC
+       ORDER BY p.current_balance_cents DESC, p.display_name ASC
        LIMIT $1 OFFSET $2`,
       [limit, offset, cutoff]
     );
@@ -325,21 +325,30 @@ export async function playerRoutes(app: FastifyInstance) {
 
     await withTransaction(async (client) => {
       // Find the entry and validate it's a manual payment
-      const entryResult = await client.query<{ amount_cents: number; game_id: string | null; created_at: string }>(
-        `SELECT amount_cents, game_id, created_at::text AS created_at 
+      const entryResult = await client.query<{ amount_cents: number; game_id: string | null; created_at: string; adjustment_reason: string }>(
+        `SELECT amount_cents, game_id, created_at::text AS created_at, adjustment_reason
          FROM ledger_entries 
          WHERE id = $1 AND player_id = $2 
            AND type = 'payment' 
-           AND adjustment_reason = 'Cash payment' 
            AND bank_transaction_id IS NULL`,
         [entryId, playerId]
       );
 
       if (entryResult.rowCount === 0) {
-        throw reply.forbidden("Entry not found or is not a manual cash payment");
+        throw reply.notFound("Manual payment entry not found");
       }
 
       const entry = entryResult.rows[0]!;
+      
+      // Validate it's likely a manual cash payment. 
+      // We look for "Cash payment" but also support descriptions from ManualAdjustmentForm like "Manual incoming payment"
+      const isCashPayment = entry.adjustment_reason === 'Cash payment' || 
+                            entry.adjustment_reason?.toLowerCase().includes('manual') ||
+                            entry.adjustment_reason?.toLowerCase().includes('cash');
+
+      if (!isCashPayment) {
+        throw reply.forbidden(`Entry is not a manual cash payment (Reason: ${entry.adjustment_reason})`);
+      }
 
       // Delete it
       await client.query(`DELETE FROM ledger_entries WHERE id = $1`, [entryId]);

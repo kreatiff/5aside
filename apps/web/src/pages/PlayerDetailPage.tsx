@@ -79,7 +79,7 @@ export const PlayerDetailPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const [notesDraft, setNotesDraft] = useState("");
-  const [showNotesPanel, setShowNotesPanel] = useState(true);
+  const [showNotesPanel, setShowNotesPanel] = useState(false);
   const [showAliasesPanel, setShowAliasesPanel] = useState(false);
   const [showAliasModal, setShowAliasModal] = useState(false);
   const [aliasInput, setAliasInput] = useState("");

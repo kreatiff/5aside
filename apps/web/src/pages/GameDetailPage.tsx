@@ -12,6 +12,7 @@ import {
   UserPlus,
   X,
   DollarSign,
+  Copy,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Modal } from "../components/Modal";
@@ -250,6 +251,41 @@ export const GameDetailPage = () => {
     e.preventDefault();
     if (!addPlayerId) return;
     addPlayerMutation.mutate();
+  };
+  
+  const handleTextExport = () => {
+    if (!game?.attendance || !paymentStatus?.playerStatuses) return;
+    
+    const formattedDate = formatDate(game.gameDate);
+    const lines = [
+      `Game on ${formattedDate}`,
+      ""
+    ];
+
+    game.attendance
+      .filter(att => att.chargeable)
+      .forEach(att => {
+        const ps = paymentStatus.playerStatuses.find(p => p.playerId === att.playerId);
+        let emoji = "❌"; // Default unpaid
+        let prefix = "@";
+        if (ps) {
+          if (ps.status === "paid") {
+            emoji = "✅";
+            prefix = "";
+          } else if (ps.status === "partial") {
+            emoji = "⏳";
+            prefix = "@";
+          }
+        }
+        lines.push(`${emoji} ${prefix}${att.displayName}`);
+      });
+
+    const text = lines.join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      addToast("success", "Attendees list copied to clipboard");
+    }).catch(() => {
+      addToast("error", "Failed to copy to clipboard");
+    });
   };
 
   // Players not already in the game
@@ -655,17 +691,27 @@ export const GameDetailPage = () => {
             Attendees (
             {game.attendance?.filter((a) => a.chargeable).length || 0})
           </h3>
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={() => {
-              setShowAddPlayer((v) => !v);
-              setAddPlayerId("");
-              setAddChargeable(true);
-            }}
-          >
-            <UserPlus size={16} />
-            {showAddPlayer ? "Cancel" : "Add Player"}
-          </button>
+          <div className="flex gap-sm">
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={handleTextExport}
+              title="Copy attendance list with payment status emojis"
+            >
+              <Copy size={16} />
+              Text Export
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                setShowAddPlayer((v) => !v);
+                setAddPlayerId("");
+                setAddChargeable(true);
+              }}
+            >
+              <UserPlus size={16} />
+              {showAddPlayer ? "Cancel" : "Add Player"}
+            </button>
+          </div>
         </div>
 
         {showAddPlayer && (

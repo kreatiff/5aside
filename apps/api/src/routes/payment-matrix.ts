@@ -32,8 +32,9 @@ export async function paymentMatrixRoutes(app: FastifyInstance) {
       `SELECT id, game_date::text AS game_date, fee_cents
        FROM games
        WHERE game_date >= (CURRENT_DATE - ($1 || ' months')::interval)
+         AND game_date <= CURRENT_DATE
          AND status != 'cancelled'
-       ORDER BY game_date ASC`,
+       ORDER BY game_date DESC`,
       [months]
     );
     const games = gamesResult.rows;
