@@ -27,6 +27,7 @@ import {
 import { useSearchParams } from "react-router-dom";
 import { Drawer } from "../components/Drawer";
 import { ManualAdjustmentForm } from "../components/ManualAdjustmentForm";
+import { useIsMobile } from "../utils/useIsMobile";
 
 type PlayerDetails = {
   id: string;
@@ -79,6 +80,7 @@ export const PlayerDetailPage = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const { addToast } = useToast();
+  const isMobile = useIsMobile();
   const [notesDraft, setNotesDraft] = useState("");
   const [showNotesPanel, setShowNotesPanel] = useState(false);
   const [showAliasesPanel, setShowAliasesPanel] = useState(false);
@@ -255,6 +257,7 @@ export const PlayerDetailPage = () => {
         key: "date",
         header: "Date",
         sortable: true,
+        mobileTitle: true,
         sortValue: (e) => {
           const dateStr =
             e.type === "charge" && e.game_date
@@ -455,6 +458,30 @@ export const PlayerDetailPage = () => {
         }
       />
 
+      {/* Mobile balance banner */}
+      {isMobile && (
+        <div className="player-balance-banner">
+          <div>
+            <div style={{ fontSize: "var(--font-xs)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>
+              Current Balance
+            </div>
+            <CurrencyDisplay
+              cents={player.currentBalanceCents}
+              size="xl"
+              colorCode
+              animated
+            />
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={() => setSearchParams({ adjustment: "true", playerId: id!, locked: "true" })}
+          >
+            <Plus size={16} />
+            Add Adjustment
+          </button>
+        </div>
+      )}
+
       <div className="grid-2 gap-md mb-lg">
         {/* Player Notes */}
         <div className="card">
@@ -644,6 +671,7 @@ export const PlayerDetailPage = () => {
           data={ledgerData}
           isLoading={loadingLedger}
           getRowId={(entry) => entry.id}
+          mobileLayout="cards"
           emptyIcon={<Receipt size={32} />}
           emptyTitle="No transactions yet"
           emptyDescription="Charges and payments will appear here once games are recorded."

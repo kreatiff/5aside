@@ -106,6 +106,7 @@ export const PlayersPage = () => {
         header: "Name",
         sortable: true,
         sortValue: (p) => p.displayName.toLowerCase(),
+        mobileTitle: true,
         render: (player) => (
           <div className="flex-between gap-sm">{player.displayName}</div>
         ),
@@ -259,6 +260,7 @@ export const PlayersPage = () => {
           selectable
           selectedIds={selectedPlayerIds}
           onSelectionChange={setSelectedPlayerIds}
+          mobileLayout="cards"
           emptyIcon={<Users size={48} />}
           emptyTitle="No players found"
           emptyDescription={

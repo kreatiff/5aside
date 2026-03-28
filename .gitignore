@@ -1,1 +1,9 @@
 get-docker.sh
+node_modules/
+dist/
+packages/contracts/dist/
+packages/recon/dist/
+apps/api/dist/
+apps/web/dist/
+.env
+*.local

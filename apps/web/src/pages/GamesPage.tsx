@@ -49,6 +49,7 @@ const columns: Column<Game>[] = [
     header: "DATE & TIME",
     sortable: true,
     sortValue: (game) => game.gameDate,
+    mobileTitle: true,
     render: (game) => {
       const date = new Date(game.gameDate + "T00:00:00Z");
       const formattedDate = date.toLocaleDateString("en-US", {
@@ -541,6 +542,7 @@ export const GamesPage = () => {
         selectable={true}
         selectedIds={selectedGameIds}
         onSelectionChange={setSelectedGameIds}
+        mobileLayout="cards"
         emptyIcon={<CalendarIcon size={48} />}
         emptyTitle="No games yet"
         emptyDescription="Create your first game to start tracking attendance and fees."

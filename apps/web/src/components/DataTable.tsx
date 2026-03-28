@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { SkeletonTable } from "./Skeleton";
 import { EmptyState } from "./EmptyState";
+import { useIsMobile } from "../utils/useIsMobile";
 
 export type Column<T> = {
   key: string;
@@ -13,6 +14,10 @@ export type Column<T> = {
   sortValue?: (item: T) => string | number;
   width?: string;
   align?: "left" | "center" | "right";
+  /** If true, this column is hidden in mobile card mode */
+  mobileHidden?: boolean;
+  /** If true, this column is used as the card title */
+  mobileTitle?: boolean;
 };
 
 type DataTableProps<T> = {
@@ -29,6 +34,10 @@ type DataTableProps<T> = {
   onSelectionChange?: (ids: Set<string>) => void;
   getRowId: (item: T) => string;
   stickyHeader?: boolean;
+  /** On mobile, render rows as stacked cards instead of table rows */
+  mobileLayout?: "scroll" | "cards";
+  /** Render extra action content at the bottom of each card (mobile only) */
+  mobileCardActions?: (item: T) => ReactNode;
 };
 
 type SortState = { key: string; direction: "asc" | "desc" } | null;
@@ -46,8 +55,11 @@ export function DataTable<T>({
   selectedIds,
   onSelectionChange,
   getRowId,
+  mobileLayout = "scroll",
+  mobileCardActions,
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<SortState>(null);
+  const isMobile = useIsMobile();
 
   const handleSort = useCallback((col: Column<T>) => {
     if (!col.sortable) return;
@@ -106,6 +118,60 @@ export function DataTable<T>({
     );
   }
 
+  // Mobile card mode
+  if (isMobile && mobileLayout === "cards") {
+    const titleCol = columns.find((c) => c.mobileTitle);
+    const bodyColumns = columns.filter(
+      (c) => !c.mobileHidden && !c.mobileTitle,
+    );
+
+    return (
+      <div>
+        {sorted.map((item, i) => {
+          const id = getRowId(item);
+          const actions = mobileCardActions?.(item);
+          return (
+            <motion.div
+              key={id}
+              className="data-table-card"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(i * 0.02, 0.3), duration: 0.2 }}
+              onClick={() => onRowClick?.(item)}
+              role={onRowClick ? "button" : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") onRowClick(item);
+                    }
+                  : undefined
+              }
+            >
+              {titleCol && (
+                <div className="data-table-card__title">
+                  {titleCol.render(item, i)}
+                </div>
+              )}
+              {bodyColumns.map((col) => (
+                <div key={col.key} className="data-table-card__row">
+                  <span className="data-table-card__label">{col.header}</span>
+                  <span className="data-table-card__value">
+                    {col.render(item, i)}
+                  </span>
+                </div>
+              ))}
+              {actions && (
+                <div className="data-table-card__actions">{actions}</div>
+              )}
+            </motion.div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Standard table mode (desktop, or mobile with scroll layout)
   return (
     <div className="data-table-wrapper">
       <table className="data-table">

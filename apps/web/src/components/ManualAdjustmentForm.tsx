@@ -200,6 +200,7 @@ export const ManualAdjustmentForm = ({ onSuccess }: { onSuccess: () => void }) =
 
       <style>{`
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; }
+        @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
         .pl-xl { padding-left: 2.5rem !important; }
         .py-sm { padding-top: 0.5rem; padding-bottom: 0.5rem; }
         .input-with-icon { position: relative; display: flex; align-items: center; }

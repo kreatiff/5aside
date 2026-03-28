@@ -96,6 +96,7 @@ export const TransactionsPage = () => {
       {
         key: "description",
         header: "Description",
+        mobileTitle: true,
         render: (tx) => (
           <div className="tx-description">
             <p className="text-primary mb-xs">
@@ -193,6 +194,7 @@ export const TransactionsPage = () => {
         data={transactions}
         isLoading={isLoading}
         getRowId={(tx) => tx.id}
+        mobileLayout="cards"
         emptyIcon={<Banknote size={48} />}
         emptyTitle="No transactions yet"
         emptyDescription="Import bank transactions via CSV or the Pocketsmith webhook."
