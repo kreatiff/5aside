@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { getInitials } from "../utils/format";
 import { useIsMobile } from "../utils/useIsMobile";
+import { PWAPrompts } from "./PWAPrompts";
 
 const SoccerBall = ({ size = 20 }: { size?: number }) => (
   <svg
@@ -205,6 +206,8 @@ export const Layout = ({ children }: { children: ReactNode }) => {
   );
 
   return (
+    <>
+    <PWAPrompts />
     <div className="app-layout">
       {/* Sidebar (desktop only) */}
       <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
@@ -394,5 +397,6 @@ export const Layout = ({ children }: { children: ReactNode }) => {
         </>
       )}
     </div>
+    </>
   );
 };
