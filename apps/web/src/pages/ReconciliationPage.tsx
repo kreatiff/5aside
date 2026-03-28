@@ -6,8 +6,10 @@ import { Check, X, Search, RefreshCw, CheckCircle, Building2, Package } from "lu
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { DataTable, type Column } from "../components/DataTable";
+import { Modal } from "../components/Modal";
 import { useToast } from "../contexts/ToastContext";
 import { formatCurrency, formatDate } from "../utils/format";
+import { useIsMobile } from "../utils/useIsMobile";
 
 type QueueItem = {
   id: string;
@@ -34,6 +36,7 @@ type Player = {
 export const ReconciliationPage = () => {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
+  const isMobile = useIsMobile();
 
   const { data: queue, isLoading: loadingQueue } = useQuery({
     queryKey: ["reconciliation"],
@@ -97,7 +100,10 @@ export const ReconciliationPage = () => {
     },
   });
 
+  // Desktop: inline select in table row
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  // Mobile: modal for player selection
+  const [mobileResolvingItem, setMobileResolvingItem] = useState<QueueItem | null>(null);
 
   const getPlayerName = (playerId: string): string => {
     const player = players?.find((p: Player) => p.id === playerId);
@@ -130,6 +136,7 @@ export const ReconciliationPage = () => {
       {
         key: "type",
         header: "Type",
+        mobileTitle: true,
         render: (item) => (
           <StatusBadge
             variant={item.itemType === "attendance" ? "info" : "success"}
@@ -171,6 +178,7 @@ export const ReconciliationPage = () => {
       {
         key: "suggestion",
         header: "Suggestion",
+        mobileHidden: false,
         render: (item) => {
           if (!item.suggestedPlayerId) {
             return <span className="text-muted">None</span>;
@@ -208,6 +216,7 @@ export const ReconciliationPage = () => {
         key: "actions",
         header: "Actions",
         align: "right",
+        mobileHidden: true,
         render: (item) => {
           const isResolving = resolvingId === item.id;
 
@@ -340,7 +349,127 @@ export const ReconciliationPage = () => {
         emptyIcon={<CheckCircle size={48} />}
         emptyTitle="You're all caught up!"
         emptyDescription="No items to reconcile."
+        mobileLayout="cards"
+        mobileCardActions={(item) => (
+          <div className="recon-mobile-actions">
+            {item.suggestedPlayerId && (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  resolveMutation.mutate({
+                    id: item.id,
+                    payload: { playerId: item.suggestedPlayerId! },
+                  });
+                }}
+              >
+                <Check size={16} /> Accept — {getPlayerName(item.suggestedPlayerId)}
+              </button>
+            )}
+            <div style={{ display: "flex", gap: "var(--spacing-xs)" }}>
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ flex: 1 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMobileResolvingItem(item);
+                }}
+              >
+                <Search size={16} /> Find Player
+              </button>
+              <button
+                className="btn btn-ghost btn-sm btn-danger"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismissMutation.mutate(item.id);
+                }}
+                title="Dismiss"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            {item.itemType === "bank_transaction" && (
+              <div style={{ display: "flex", gap: "var(--spacing-xs)" }}>
+                <button
+                  className="btn btn-outline btn-sm"
+                  style={{ flex: 1 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    resolveMutation.mutate({
+                      id: item.id,
+                      payload: { venueCategory: "game_fees" },
+                    });
+                  }}
+                >
+                  <Building2 size={14} /> Game Fees
+                </button>
+                <button
+                  className="btn btn-outline btn-sm"
+                  style={{ flex: 1 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    resolveMutation.mutate({
+                      id: item.id,
+                      payload: { venueCategory: "equipment" },
+                    });
+                  }}
+                >
+                  <Package size={14} /> Equipment
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       />
+
+      {/* Mobile: resolve by finding a player via modal */}
+      {isMobile && (
+        <Modal
+          isOpen={!!mobileResolvingItem}
+          onClose={() => setMobileResolvingItem(null)}
+          title="Find Player"
+          size="sm"
+        >
+          {mobileResolvingItem && (
+            <div>
+              <p className="text-secondary mb-md" style={{ fontSize: "var(--font-sm)" }}>
+                {mobileResolvingItem.payload.descriptionRaw ||
+                  mobileResolvingItem.payload.playerName ||
+                  "Unknown"}
+              </p>
+              <select
+                className="input-field"
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    resolveMutation.mutate({
+                      id: mobileResolvingItem.id,
+                      payload: { playerId: e.target.value },
+                    });
+                    setMobileResolvingItem(null);
+                  }
+                }}
+              >
+                <option value="" disabled>
+                  Select a player...
+                </option>
+                {players?.map((p: Player) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayName}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn btn-outline mt-md"
+                style={{ width: "100%" }}
+                onClick={() => setMobileResolvingItem(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </Modal>
+      )}
     </>
   );
 };

@@ -166,6 +166,7 @@ export const DashboardPage = () => {
 
       {/* 60/40 Split Content */}
       <div
+        className="dashboard-content-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)",
@@ -397,6 +398,7 @@ export const DashboardPage = () => {
 
         {/* Right Column (40%) */}
         <div
+          className="dashboard-quick-actions"
           style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
         >
           <h3 style={{ fontSize: "1.125rem", fontWeight: 600, margin: 0 }}>

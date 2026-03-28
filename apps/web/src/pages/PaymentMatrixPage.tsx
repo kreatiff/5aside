@@ -103,6 +103,7 @@ export const PaymentMatrixPage = () => {
   const [months, setMonths] = useState(3);
   const navigate = useNavigate();
 
+
   const { data: matrix, isLoading } = useQuery({
     queryKey: ["payment-matrix", months],
     queryFn: async () => {
@@ -175,8 +176,53 @@ export const PaymentMatrixPage = () => {
           No games found in the selected period.
         </div>
       ) : (
-        <div className="payment-matrix-container">
-          <div className="payment-matrix-scroll-v2">
+        <>
+          {/* Mobile list view — shown only on mobile via CSS */}
+          <div className="payment-matrix-mobile-list">
+            <div style={{ padding: "var(--spacing-sm) var(--spacing-md)", borderBottom: "1px solid var(--border-subtle)", marginBottom: "var(--spacing-xs)" }}>
+              <span className="text-muted" style={{ fontSize: "var(--font-xs)" }}>
+                Full payment matrix available on desktop. Showing player balances.
+              </span>
+            </div>
+            {players
+              .slice()
+              .sort((a, b) => computeOutstanding(b.cells) - computeOutstanding(a.cells))
+              .map((player) => {
+                const outstanding = computeOutstanding(player.cells);
+                const paidCount = player.cells.filter((c) => c?.status === "paid").length;
+                const partialCount = player.cells.filter((c) => c?.status === "partial").length;
+                const unpaidCount = player.cells.filter((c) => c?.status === "unpaid").length;
+                return (
+                  <div
+                    key={player.id}
+                    className="pm-mobile-player-row"
+                    onClick={() => navigate(`/players/${player.id}`)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter") navigate(`/players/${player.id}`); }}
+                  >
+                    <div>
+                      <div className="pm-mobile-player-name">{player.displayName}</div>
+                      <div className="pm-mobile-player-meta">
+                        <span style={{ color: "var(--success)" }}>{paidCount}✓</span>
+                        {partialCount > 0 && <span style={{ color: "var(--warning)" }}>{partialCount}◐</span>}
+                        {unpaidCount > 0 && <span style={{ color: "var(--danger)" }}>{unpaidCount}✗</span>}
+                      </div>
+                    </div>
+                    {outstanding > 0 && (
+                      <span className="pm-mobile-outstanding">−{formatCurrency(outstanding)}</span>
+                    )}
+                    {outstanding === 0 && (
+                      <span style={{ fontSize: "var(--font-sm)", color: "var(--success)", fontWeight: 600 }}>✓ Clear</span>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+
+          {/* Desktop/tablet matrix — hidden on mobile via CSS */}
+          <div className="payment-matrix-container">
+            <div className="payment-matrix-scroll-v2">
             <table className="payment-matrix-v2">
               <thead>
                 <tr>
@@ -364,7 +410,8 @@ export const PaymentMatrixPage = () => {
               </tbody>
             </table>
           </div>
-        </div>
+          </div>
+        </>
       )}
     </>
   );

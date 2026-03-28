@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
@@ -14,8 +14,11 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  MoreHorizontal,
+  X,
 } from "lucide-react";
 import { getInitials } from "../utils/format";
+import { useIsMobile } from "../utils/useIsMobile";
 
 const SoccerBall = ({ size = 20 }: { size?: number }) => (
   <svg
@@ -31,7 +34,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="M12 0.75A11.25 11.25 0 1 0 23.25 12 11.25 11.25 0 0 0 12 0.75Z"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -39,7 +42,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m8.895 16.754 -1.91 -5.9L12 7.208l5.015 3.646 -1.91 5.9 -6.21 0z"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -47,7 +50,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="M16.301 1.601 12 4.5 7.699 1.601"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -55,7 +58,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m14.599 22.948 2.139 -4.366 4.884 -0.75"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -63,7 +66,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m23.214 12.909 -3.427 -3.413 0.735 -4.839"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -71,7 +74,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m12 4.5 0 2.708"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -79,7 +82,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m17.015 10.854 2.772 -1.358"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -87,7 +90,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m0.786 12.909 3.427 -3.413 -0.735 -4.839"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -95,7 +98,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="M6.985 10.854 4.213 9.496"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -103,7 +106,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m15.105 16.754 1.633 1.828"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -111,7 +114,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m9.401 22.948 -2.139 -4.366 -4.884 -0.75"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -119,7 +122,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m8.895 16.754 -1.633 1.828"
       fill="none"
-      stroke="#000000"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -127,6 +130,23 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
   </svg>
 );
 
+// Primary bottom nav tabs (shown directly)
+const primaryRoutes = [
+  { path: "/dashboard", name: "Dashboard", icon: LayoutDashboard },
+  { path: "/players", name: "Players", icon: Users },
+  { path: "/reconciliation", name: "Recon", icon: ArrowRightLeft, badge: true },
+  { path: "/games", name: "Games", icon: SoccerBall },
+];
+
+// Secondary routes shown in "More" sheet
+const moreRoutes = [
+  { path: "/transactions", name: "Transactions", icon: Banknote },
+  { path: "/payments", name: "Matrix", icon: Grid3X3 },
+  { path: "/imports", name: "Imports", icon: Download },
+  { path: "/settings", name: "Settings", icon: Settings },
+];
+
+// All routes (for desktop sidebar)
 const routes = [
   { path: "/dashboard", name: "Dashboard", icon: LayoutDashboard },
   { path: "/players", name: "Players", icon: Users },
@@ -143,6 +163,8 @@ declare const __APP_VERSION__: string;
 export const Layout = ({ children }: { children: ReactNode }) => {
   const { admin } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem("sidebar-collapsed") === "true";
@@ -150,6 +172,7 @@ export const Layout = ({ children }: { children: ReactNode }) => {
       return false;
     }
   });
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -158,6 +181,11 @@ export const Layout = ({ children }: { children: ReactNode }) => {
       /* noop */
     }
   }, [collapsed]);
+
+  // Close more sheet on navigation
+  useEffect(() => {
+    setMoreSheetOpen(false);
+  }, [location.pathname]);
 
   const { data: reconData } = useQuery({
     queryKey: ["recon-queue-count"],
@@ -171,8 +199,14 @@ export const Layout = ({ children }: { children: ReactNode }) => {
   const reconCount = reconData?.total ?? 0;
   const initials = admin?.email ? getInitials(admin.email.split("@")[0]) : "?";
 
+  // Is any "more" route currently active?
+  const moreIsActive = moreRoutes.some((r) =>
+    location.pathname.startsWith(r.path),
+  );
+
   return (
     <div className="app-layout">
+      {/* Sidebar (desktop only) */}
       <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
         <button
           className="sidebar-toggle"
@@ -262,6 +296,103 @@ export const Layout = ({ children }: { children: ReactNode }) => {
           </AnimatePresence>
         </div>
       </main>
+
+      {/* Bottom Navigation (mobile only) */}
+      {isMobile && (
+        <>
+          <nav className="bottom-nav" role="navigation" aria-label="Main navigation">
+            {primaryRoutes.map((route) => {
+              const Icon = route.icon;
+              const isActive = location.pathname.startsWith(route.path);
+              const badge = route.badge && reconCount > 0 ? reconCount : null;
+              return (
+                <Link
+                  key={route.path}
+                  to={route.path}
+                  className={`bottom-nav-item ${isActive ? "active" : ""}`}
+                  aria-label={route.name}
+                >
+                  <Icon size={22} />
+                  <span>{route.name}</span>
+                  {badge !== null && (
+                    <span className="bottom-nav-badge">
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+            <button
+              className={`bottom-nav-item ${moreIsActive || moreSheetOpen ? "active" : ""}`}
+              onClick={() => setMoreSheetOpen(true)}
+              aria-label="More navigation options"
+            >
+              <MoreHorizontal size={22} />
+              <span>More</span>
+            </button>
+          </nav>
+
+          {/* More sheet overlay */}
+          <AnimatePresence>
+            {moreSheetOpen && (
+              <>
+                <motion.div
+                  className="more-sheet-overlay"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => setMoreSheetOpen(false)}
+                />
+                <motion.div
+                  className="more-sheet"
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <div className="more-sheet-header">
+                    <span className="more-sheet-title">More</span>
+                    <button
+                      className="btn-icon"
+                      onClick={() => setMoreSheetOpen(false)}
+                      aria-label="Close menu"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <div className="more-sheet-grid">
+                    {moreRoutes.map((route) => {
+                      const Icon = route.icon;
+                      const isActive = location.pathname.startsWith(route.path);
+                      return (
+                        <button
+                          key={route.path}
+                          className={`more-sheet-item ${isActive ? "active" : ""}`}
+                          onClick={() => {
+                            navigate(route.path);
+                            setMoreSheetOpen(false);
+                          }}
+                        >
+                          <Icon size={24} />
+                          <span>{route.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="more-sheet-admin">
+                    <div className="admin-avatar" style={{ flexShrink: 0 }}>{initials}</div>
+                    <div style={{ overflow: "hidden" }}>
+                      <div className="admin-email">{admin?.email}</div>
+                      <div className="admin-role">{admin?.role}</div>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </>
+      )}
     </div>
   );
 };
