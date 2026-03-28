@@ -33,7 +33,7 @@ export default defineConfig({
         background_color: '#f9f9f8',
         display: 'standalone',
         orientation: 'portrait-primary',
-        start_url: '/dashboard',
+        start_url: '/',
         scope: '/',
         lang: 'en',
         categories: ['sports', 'finance', 'productivity'],
@@ -66,14 +66,14 @@ export default defineConfig({
             name: 'Reconciliation Queue',
             short_name: 'Recon',
             description: 'Review unmatched transactions',
-            url: '/reconciliation',
+            url: '/#/reconciliation',
             icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }],
           },
           {
             name: 'Players',
             short_name: 'Players',
             description: 'View and manage players',
-            url: '/players',
+            url: '/#/players',
             icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }],
           },
         ],
@@ -85,7 +85,6 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         // Skip waiting so updates activate immediately after user acknowledges
         skipWaiting: false,
-        clientsClaim: true,
         runtimeCaching: [
           // Auth endpoints — never cache (always network)
           {
@@ -186,8 +185,6 @@ export default defineConfig({
           },
         ],
         // Don't cache POST/PATCH/DELETE — mutations must always go to network
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/\/api\//],
       },
       devOptions: {
         // Enable PWA in dev for testing (uses a mock SW)

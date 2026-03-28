@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
+import { createHashRouter, Navigate, Outlet } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { DashboardPage } from "./pages/DashboardPage";
 import { PlayersPage } from "./pages/PlayersPage";
@@ -20,7 +20,7 @@ const ProtectedRoute = () => {
   );
 };
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: "/",
     element: <ProtectedRoute />,
