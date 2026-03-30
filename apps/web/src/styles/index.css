@@ -2817,3 +2817,33 @@ input[type="checkbox"] {
     transform: none;
   }
 }
+
+/* ========================================================================
+   Dashboard Utilities
+   ======================================================================== */
+
+.dashboard-split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 2rem;
+  margin-bottom: var(--spacing-lg);
+}
+
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .dashboard-split {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 500px) {
+  .quick-actions-grid {
+    grid-template-columns: 1fr;
+  }
+}

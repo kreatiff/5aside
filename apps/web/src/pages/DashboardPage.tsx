@@ -150,14 +150,7 @@ export const DashboardPage = () => {
       </div>
 
       {/* 60/40 Split Content - NEW GAME-FIRST APPROACH */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)",
-          gap: "2rem",
-          marginBottom: "var(--spacing-lg)",
-        }}
-      >
+      <div className="dashboard-split">
         {/* Left Column (60%) - Recent Activity Feed */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -259,7 +252,7 @@ export const DashboardPage = () => {
 
           <h3 style={{ fontSize: "1.125rem", fontWeight: 600, margin: 0 }}>Quick Actions</h3>
           <div className="card" style={{ padding: "1.25rem" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div className="quick-actions-grid">
               <button className="btn btn-outline btn-sm" onClick={() => navigate("/games")}>
                 <Plus size={16} />
                 <span>Create Game</span>
