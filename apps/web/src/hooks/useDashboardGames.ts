@@ -36,7 +36,7 @@ export function useDashboardGames() {
     queryKey: ["dashboard", "recent-games"],
     queryFn: async () => {
       const { data } = await api.get<{ data: (Game & { attendanceCount: number })[] }>(
-        "/games?limit=5"
+        "/games?limit=5&past_only=true"
       );
       return data.data;
     },

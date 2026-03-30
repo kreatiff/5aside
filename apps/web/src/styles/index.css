@@ -269,6 +269,7 @@ button {
 
 .btn-primary:hover {
   background-color: var(--primary-hover);
+  color: white;
 }
 
 .btn-primary:active {
@@ -295,6 +296,7 @@ button {
 
 .btn-danger:hover {
   background-color: var(--danger-hover);
+  color: white;
 }
 
 .btn-danger:active {
@@ -308,6 +310,7 @@ button {
 
 .btn-success:hover {
   background-color: var(--success-hover);
+  color: white;
 }
 
 .btn-outline {

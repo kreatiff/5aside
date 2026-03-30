@@ -20,13 +20,17 @@ export async function gameRoutes(app: FastifyInstance) {
     const limit = Number((request.query as any).limit) || 50;
     const offset = Number((request.query as any).offset) || 0;
 
+    const pastOnly = (request.query as any).past_only === 'true';
+    const whereClause = pastOnly ? "WHERE g.game_date < CURRENT_DATE" : "";
+    const countWhere = pastOnly ? "WHERE game_date < CURRENT_DATE" : "";
+
     // Auto-transition scheduled games whose date has passed to pending
     await query(
       `UPDATE games SET status = 'pending', updated_at = NOW()
        WHERE status = 'scheduled' AND game_date < CURRENT_DATE`
     );
 
-    const countResult = await query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM games`);
+    const countResult = await query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM games ${countWhere}`);
     const total = Number(countResult.rows[0]?.count || 0);
 
     const result = await query<GameRow & { attendance_count: string }>(
@@ -34,6 +38,7 @@ export async function gameRoutes(app: FastifyInstance) {
               g.fee_cents, g.venue_fee_cents, g.source, g.status, g.created_at, g.updated_at,
               (SELECT COUNT(*)::text FROM attendance a WHERE a.game_id = g.id AND a.chargeable = true) AS attendance_count
        FROM games g
+       ${whereClause}
        ORDER BY g.game_date DESC, g.kickoff_at_utc DESC NULLS LAST
        LIMIT $1 OFFSET $2`,
       [limit, offset]
