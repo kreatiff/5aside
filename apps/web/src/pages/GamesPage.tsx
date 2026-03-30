@@ -251,6 +251,9 @@ export const GamesPage = () => {
   const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
   const [newBatchFee, setNewBatchFee] = useState("");
 
+  const [currentTab, setCurrentTab] = useState<"past" | "future">("past");
+  const [showAllPast, setShowAllPast] = useState(false);
+
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { addToast } = useToast();
@@ -438,6 +441,27 @@ export const GamesPage = () => {
   };
 
   const games: Game[] = data?.data ?? [];
+  const today = new Date().toISOString().split("T")[0];
+
+  const { pastGames, futureGames } = useMemo(() => {
+    return games.reduce(
+      (acc, game) => {
+        if (game.gameDate < today) {
+          acc.pastGames.push(game);
+        } else {
+          acc.futureGames.push(game);
+        }
+        return acc;
+      },
+      { pastGames: [] as Game[], futureGames: [] as Game[] },
+    );
+  }, [games, today]);
+
+  const displayedGames = useMemo(() => {
+    if (currentTab === "future") return futureGames;
+    if (showAllPast) return pastGames;
+    return pastGames.slice(0, 20);
+  }, [currentTab, pastGames, futureGames, showAllPast]);
 
   return (
     <>
@@ -533,9 +557,55 @@ export const GamesPage = () => {
         </div>
       )}
 
+      <div
+        style={{
+          display: "flex",
+          gap: "1.5rem",
+          marginBottom: "1.5rem",
+          borderBottom: "1px solid var(--border-subtle)",
+        }}
+      >
+        <button
+          className="btn btn-ghost"
+          onClick={() => setCurrentTab("past")}
+          style={{
+            borderRadius: "0",
+            borderBottom:
+              currentTab === "past" ? "2px solid var(--primary)" : "none",
+            padding: "0.75rem 0.5rem",
+            marginBottom: "-1px",
+            color:
+              currentTab === "past"
+                ? "var(--primary)"
+                : "var(--text-secondary)",
+            fontWeight: currentTab === "past" ? 600 : 500,
+          }}
+        >
+          Past Games ({pastGames.length})
+        </button>
+        <button
+          className="btn btn-ghost"
+          onClick={() => setCurrentTab("future")}
+          style={{
+            borderRadius: "0",
+            borderBottom:
+              currentTab === "future" ? "2px solid var(--primary)" : "none",
+            padding: "0.75rem 0.5rem",
+            marginBottom: "-1px",
+            color:
+              currentTab === "future"
+                ? "var(--primary)"
+                : "var(--text-secondary)",
+            fontWeight: currentTab === "future" ? 600 : 500,
+          }}
+        >
+          Future Games ({futureGames.length})
+        </button>
+      </div>
+
       <DataTable<Game>
         columns={columns}
-        data={games}
+        data={displayedGames}
         isLoading={isLoading}
         getRowId={(game) => game.id}
         onRowClick={(game) => navigate(`/games/${game.id}`)}
@@ -544,9 +614,31 @@ export const GamesPage = () => {
         onSelectionChange={setSelectedGameIds}
         mobileLayout="cards"
         emptyIcon={<CalendarIcon size={48} />}
-        emptyTitle="No games yet"
-        emptyDescription="Create your first game to start tracking attendance and fees."
+        emptyTitle={currentTab === "past" ? "No past games" : "No future games"}
+        emptyDescription={
+          currentTab === "past"
+            ? "Completed games will appear here."
+            : "Scheduled games will appear here."
+        }
       />
+
+      {currentTab === "past" && pastGames.length > 20 && !showAllPast && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginTop: "2rem",
+          }}
+        >
+          <button
+            className="btn btn-outline"
+            onClick={() => setShowAllPast(true)}
+            style={{ padding: "0.75rem 2rem" }}
+          >
+            Show All Games ({pastGames.length - 20} more)
+          </button>
+        </div>
+      )}
 
       {/* Single Game Create Modal */}
       <Modal
