@@ -80,10 +80,10 @@ export const DashboardPage = () => {
   const { data: players } = useQuery({
     queryKey: ["players", "debtors"],
     queryFn: async () => {
-      const { data } = await api.get<{ players: Player[] }>(
+      const { data } = await api.get<{ data: Player[] }>(
         "/players?limit=1000&active=true",
       );
-      return data.players;
+      return data.data;
     },
   });
 
