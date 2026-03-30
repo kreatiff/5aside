@@ -4,12 +4,14 @@ import { formatCurrency } from "../utils/format";
 
 type CurrencyDisplayProps = {
   cents: number;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "xs" | "sm" | "md" | "lg" | "xl";
   colorCode?: boolean;
+  color?: string;
   animated?: boolean;
 };
 
 const sizeMap = {
+  xs: "0.6875rem",
   sm: "var(--font-sm)",
   md: "var(--font-base)",
   lg: "var(--font-lg)",
@@ -38,7 +40,7 @@ function AnimatedValue({ value }: { value: MotionValue<string> }) {
   return <span ref={ref} />;
 }
 
-export const CurrencyDisplay = ({ cents, size = "md", colorCode = true, animated = false }: CurrencyDisplayProps) => {
+export const CurrencyDisplay = ({ cents, size = "md", colorCode = true, color: colorOverride, animated = false }: CurrencyDisplayProps) => {
   const spring = useSpring(0, { stiffness: 80, damping: 20 });
   const display = useTransform(spring, (v) => formatCurrency(Math.round(v)));
 
@@ -46,7 +48,7 @@ export const CurrencyDisplay = ({ cents, size = "md", colorCode = true, animated
     if (animated) spring.set(cents);
   }, [cents, animated, spring]);
 
-  const color = colorCode ? getColor(cents) : "var(--text-primary)";
+  const color = colorOverride || (colorCode ? getColor(cents) : "var(--text-primary)");
 
   return (
     <motion.span
