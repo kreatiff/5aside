@@ -11,9 +11,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import {
-  Users,
   DollarSign,
-  Calendar as CalendarIcon,
   Plus,
   Upload,
   ArrowRightLeft,
@@ -111,19 +109,9 @@ export const DashboardPage = () => {
         {loadingSummary ? (
           <>
             <SkeletonStatCard />
-            <SkeletonStatCard />
-            <SkeletonStatCard />
           </>
         ) : (
           <>
-            <StatCard
-              icon={<Users size={24} />}
-              label="Active Players"
-              value={summary?.activePlayers ?? 0}
-              subValue={`/ ${summary?.totalPlayers ?? 0} total`}
-              accentColor="var(--primary)"
-              index={0}
-            />
             <StatCard
               icon={<DollarSign size={24} />}
               label="Outstanding Balance"
@@ -135,15 +123,7 @@ export const DashboardPage = () => {
                 />
               }
               accentColor="var(--danger)"
-              index={1}
-            />
-            <StatCard
-              icon={<CalendarIcon size={24} />}
-              label="Games This Month"
-              value={summary?.gamesThisMonth ?? 0}
-              subValue={`/ ${summary?.gamesTotal ?? 0} total`}
-              accentColor="var(--warning)"
-              index={2}
+              index={0}
             />
           </>
         )}
