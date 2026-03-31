@@ -95,7 +95,7 @@ export const AttendanceImportRowSchema = z.object({
 export type AttendanceImportRow = z.infer<typeof AttendanceImportRowSchema>;
 
 export const AttendanceImportSchema = z.object({
-  rows: z.array(AttendanceImportRowSchema).min(1),
+  rows: z.array(AttendanceImportRowSchema),
   source: SourceSchema.default("facebook")
 });
 export type AttendanceImportInput = z.infer<typeof AttendanceImportSchema>;
@@ -111,7 +111,7 @@ export const BankImportRowSchema = z.object({
 export type BankImportRow = z.infer<typeof BankImportRowSchema>;
 
 export const BankImportSchema = z.object({
-  rows: z.array(BankImportRowSchema).min(1),
+  rows: z.array(BankImportRowSchema),
   mode: z.enum(["csv", "webhook"])
 });
 export type BankImportInput = z.infer<typeof BankImportSchema>;
@@ -183,12 +183,12 @@ export type CsvBankUploadInput = z.infer<typeof CsvBankUploadSchema>;
 
 export const WebhookAttendanceSchema = z.object({
   gameId: z.string().uuid(),
-  rows: z.array(AttendanceImportRowSchema).min(1)
+  rows: z.array(AttendanceImportRowSchema)
 });
 export type WebhookAttendanceInput = z.infer<typeof WebhookAttendanceSchema>;
 
 export const WebhookBankSchema = z.object({
-  rows: z.array(BankImportRowSchema).min(1)
+  rows: z.array(BankImportRowSchema)
 });
 export type WebhookBankInput = z.infer<typeof WebhookBankSchema>;
 
@@ -202,10 +202,10 @@ const PocketsmithTransactionSchema = z.object({
 
 const PocketsmithResponseSchema = z.object({
   response: z.object({
-    transactions: z.array(PocketsmithTransactionSchema).min(1),
+    transactions: z.array(PocketsmithTransactionSchema),
   }).passthrough(),
 });
 
-export const WebhookPocketsmithSchema = z.array(PocketsmithResponseSchema).min(1);
+export const WebhookPocketsmithSchema = z.array(PocketsmithResponseSchema);
 
 export type WebhookPocketsmithInput = z.infer<typeof WebhookPocketsmithSchema>;

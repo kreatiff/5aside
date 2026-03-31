@@ -138,6 +138,11 @@ export async function importRoutes(app: FastifyInstance) {
       ? parsed.rows.filter((r: any) => !r.externalTxnId || !excludeSet.has(r.externalTxnId))
       : parsed.rows;
 
+    if (filteredRows.length === 0) {
+      reply.code(200);
+      return { importId: null, posted: 0, queued: 0, message: "No new transactions" };
+    }
+
     const result = await withTransaction(async (client) => {
       const importRow = await client.query<{ id: string }>(
         `INSERT INTO imports (source_type, mode, checksum, record_count, status)
@@ -176,6 +181,11 @@ export async function importRoutes(app: FastifyInstance) {
     const body = parseBody(reply, WebhookBankSchema, request.body);
     const parsed = parseBody(reply, BankImportSchema, { rows: body.rows, mode: "webhook" });
 
+    if (parsed.rows.length === 0) {
+      reply.code(200);
+      return { importId: null, posted: 0, queued: 0, message: "No new transactions" };
+    }
+
     const result = await withTransaction(async (client) => {
       const importRow = await client.query<{ id: string }>(
         `INSERT INTO imports (source_type, mode, checksum, record_count, status)
@@ -212,6 +222,11 @@ export async function importRoutes(app: FastifyInstance) {
   app.post("/api/webhooks/facebook-attendance", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
     assertWebhookSecret(request, reply);
     const body = parseBody(reply, WebhookAttendanceSchema, request.body);
+
+    if (body.rows.length === 0) {
+      reply.code(200);
+      return { importId: null, imported: 0, charged: 0, queued: 0, message: "No attendance rows" };
+    }
 
     const result = await withTransaction(async (client) => {
       const importRow = await client.query<{ id: string }>(
@@ -307,6 +322,11 @@ export async function importRoutes(app: FastifyInstance) {
 
     // Flatten all transactions from all response objects
     const transactions = body.flatMap((item) => item.response.transactions);
+
+    if (transactions.length === 0) {
+      reply.code(200);
+      return { importId: null, posted: 0, queued: 0, message: "No new transactions" };
+    }
 
     // Transform Pocketsmith format → internal ProcessBankRowInput format
     const mappedRows = transactions.map((tx) => ({

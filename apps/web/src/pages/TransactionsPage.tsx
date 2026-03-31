@@ -234,32 +234,63 @@ export const TransactionsPage = () => {
             </div>
           )}
 
-          {!isSyncing && syncResult && (
-            <div className="flex-col gap-sm">
-              <div
-                className="toast toast-success mb-0 w-full"
-                style={{
-                  position: "relative",
-                  transform: "none",
-                  opacity: 1,
-                  marginBottom: "1rem",
-                }}
-              >
-                <p>
-                  <strong>Sync completed successfully.</strong>
-                </p>
-              </div>
-              <h4 className="m-0">Summary</h4>
-              <div className="card p-sm bg-neutral">
-                <pre
-                  className="text-sm m-0"
-                  style={{ whiteSpace: "pre-wrap", overflowX: "auto" }}
+          {!isSyncing && syncResult && (() => {
+            let posted = 0;
+            let queued = 0;
+            let message = "Sync completed successfully.";
+            
+            if (Array.isArray(syncResult) && syncResult.length > 0) {
+              posted = syncResult.reduce((sum, r) => sum + (r?.posted || 0), 0);
+              queued = syncResult.reduce((sum, r) => sum + (r?.queued || 0), 0);
+              if (syncResult[0]?.message) message = syncResult[0].message;
+              else if (posted === 0 && queued === 0) message = "No new transactions found.";
+              else message = `Processed ${posted + queued} transactions.`;
+            } else if (syncResult && typeof syncResult === 'object') {
+              // PocketSmith via n8n might wrap it in some data object, but let's assume flat
+              posted = syncResult.posted || 0;
+              queued = syncResult.queued || 0;
+              if (syncResult.message) message = syncResult.message;
+              else if (posted === 0 && queued === 0) message = "No new transactions found.";
+              else message = `Processed ${posted + queued} transactions.`;
+            }
+
+            const hasData = posted > 0 || queued > 0;
+
+            return (
+              <div className="flex-col gap-sm">
+                <div
+                  className={`toast mb-0 w-full ${hasData ? 'toast-success' : 'toast-info'}`}
+                  style={{
+                    position: "relative",
+                    transform: "none",
+                    opacity: 1,
+                    marginBottom: "1rem",
+                  }}
                 >
-                  {JSON.stringify(syncResult, null, 2)}
-                </pre>
+                  <p className="m-0">
+                    <strong>{message}</strong>
+                  </p>
+                </div>
+                
+                {hasData ? (
+                  <div className="flex-row gap-md" style={{ display: 'flex' }}>
+                    <div className="card text-center p-md flex-1 bg-subtle" style={{ flex: 1 }}>
+                      <h2 className="m-0 text-success" style={{ fontSize: "2.5rem" }}>{posted}</h2>
+                      <p className="text-sm text-secondary m-0 mt-xs font-medium">Auto-Matched</p>
+                    </div>
+                    <div className="card text-center p-md flex-1 bg-subtle" style={{ flex: 1 }}>
+                      <h2 className="m-0 text-warning" style={{ fontSize: "2.5rem" }}>{queued}</h2>
+                      <p className="text-sm text-secondary m-0 mt-xs font-medium">Needs Review</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center p-md text-muted italic">
+                    Everything is up to date. No new transactions to process.
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </Modal>
 
