@@ -56,12 +56,18 @@ export function PWAPrompts() {
     updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r) {
-      // Poll for updates every 60 seconds while the app is open
       if (r) {
         setInterval(() => r.update(), 60_000);
       }
     },
+    onRegisterError(error) {
+      console.error("SW Registration error", error);
+    },
   });
+
+  const handleUpdate = async () => {
+    await updateServiceWorker(true);
+  };
 
   const showInstall = !!installEvent && !installDismissed;
   const showUpdate = needRefresh;
@@ -82,7 +88,7 @@ export function PWAPrompts() {
             <span>A new version is available.</span>
             <button
               className="btn btn-sm btn-primary"
-              onClick={() => updateServiceWorker(true)}
+              onClick={handleUpdate}
             >
               Update now
             </button>

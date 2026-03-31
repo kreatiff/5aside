@@ -84,7 +84,8 @@ export default defineConfig({
         // Clean up old caches on activation
         cleanupOutdatedCaches: true,
         // Skip waiting so updates activate immediately after user acknowledges
-        skipWaiting: false,
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           // Auth endpoints — never cache (always network)
           {
