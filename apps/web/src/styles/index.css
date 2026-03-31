@@ -526,7 +526,7 @@ input[type="checkbox"] {
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  padding: var(--spacing-lg) var(--spacing-md);
+  padding: calc(var(--spacing-lg) + env(safe-area-inset-top, 0px)) var(--spacing-md) var(--spacing-lg);
   transition: width var(--duration-slow) var(--ease-out-expo);
   position: relative;
   z-index: var(--z-sidebar);
@@ -535,7 +535,7 @@ input[type="checkbox"] {
 
 .sidebar.collapsed {
   width: var(--sidebar-collapsed-width);
-  padding: var(--spacing-lg) var(--spacing-sm);
+  padding: calc(var(--spacing-lg) + env(safe-area-inset-top, 0px)) var(--spacing-sm) var(--spacing-lg);
 }
 
 .sidebar-header {
@@ -749,7 +749,7 @@ input[type="checkbox"] {
 .main-content {
   flex: 1;
   min-width: 0;
-  padding: var(--spacing-xl) var(--spacing-2xl);
+  padding: calc(var(--spacing-xl) + env(safe-area-inset-top, 0px)) var(--spacing-2xl) var(--spacing-xl);
   overflow-y: auto;
   overflow-x: hidden;
   background-color: var(--bg-base);
@@ -2270,7 +2270,7 @@ input[type="checkbox"] {
 }
 
 .pwa-banner--update {
-  top: var(--spacing-md);
+  top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
   border-left: 3px solid var(--primary);
   max-width: 480px;
   margin: 0 auto;
@@ -2379,7 +2379,7 @@ input[type="checkbox"] {
 
   /* Main content fills full width, leave room for bottom nav */
   .main-content {
-    padding: var(--spacing-md);
+    padding: calc(var(--spacing-md) + env(safe-area-inset-top, 0px)) var(--spacing-md);
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px) + var(--spacing-md));
   }
 
