@@ -1406,6 +1406,24 @@ input[type="checkbox"] {
 }
 
 /* ========================================================================
+   Dashboard Split Layout
+   ======================================================================== */
+
+.dashboard-split {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+@media (min-width: 1024px) {
+  .dashboard-split {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    align-items: start;
+  }
+}
+
+/* ========================================================================
    Top Debtors (Dashboard)
    ======================================================================== */
 
