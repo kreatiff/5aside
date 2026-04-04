@@ -1,6 +1,5 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
@@ -39,7 +38,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="M12 0.75A11.25 11.25 0 1 0 23.25 12 11.25 11.25 0 0 0 12 0.75Z"
       fill="none"
       stroke="currentColor"
-      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -47,7 +45,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m8.895 16.754 -1.91 -5.9L12 7.208l5.015 3.646 -1.91 5.9 -6.21 0z"
       fill="none"
-      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -57,7 +54,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="M16.301 1.601 12 4.5 7.699 1.601"
       fill="none"
       stroke="currentColor"
-      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -65,7 +61,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m14.599 22.948 2.139 -4.366 4.884 -0.75"
       fill="none"
-      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -75,7 +70,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="m23.214 12.909 -3.427 -3.413 0.735 -4.839"
       fill="none"
       stroke="currentColor"
-      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -83,7 +77,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m12 4.5 0 2.708"
       fill="none"
-      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -93,7 +86,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="m17.015 10.854 2.772 -1.358"
       fill="none"
       stroke="currentColor"
-      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -101,7 +93,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m0.786 12.909 3.427 -3.413 -0.735 -4.839"
       fill="none"
-      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -111,7 +102,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="M6.985 10.854 4.213 9.496"
       fill="none"
       stroke="currentColor"
-      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -119,7 +109,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m15.105 16.754 1.633 1.828"
       fill="none"
-      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -129,7 +118,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="m9.401 22.948 -2.139 -4.366 -4.884 -0.75"
       fill="none"
       stroke="currentColor"
-      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -137,7 +125,6 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m8.895 16.754 -1.633 1.828"
       fill="none"
-      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -178,8 +165,6 @@ declare const __APP_VERSION__: string;
 export const Layout = ({ children }: { children: ReactNode }) => {
   const { admin } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(() => {
@@ -238,11 +223,6 @@ export const Layout = ({ children }: { children: ReactNode }) => {
 
   const reconCount = reconData?.total ?? 0;
   const initials = admin?.email ? getInitials(admin.email.split("@")[0]) : "?";
-
-  // Is any "more" route currently active?
-  const moreIsActive = moreRoutes.some((r) =>
-    location.pathname.startsWith(r.path),
-  );
 
   // Is any "more" route currently active?
   const moreIsActive = moreRoutes.some((r) =>
@@ -474,7 +454,6 @@ export const Layout = ({ children }: { children: ReactNode }) => {
         </>
       )}
     </div>
-    </>
     </>
   );
 };

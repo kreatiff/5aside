@@ -25,11 +25,17 @@ type BankTransaction = {
   createdAt: string;
 };
 
+type SyncResponse = {
+  posted?: number;
+  queued?: number;
+  message?: string;
+};
+
 export const TransactionsPage = () => {
   const queryClient = useQueryClient();
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<Record<string, unknown> | null>(null);
+  const [syncResult, setSyncResult] = useState<SyncResponse | SyncResponse[] | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdjustmentOpen = searchParams.get("adjustment") === "true";
@@ -69,7 +75,7 @@ export const TransactionsPage = () => {
       }
 
       const result = await response.json();
-      setSyncResult(result as Record<string, unknown>);
+      setSyncResult(result as SyncResponse | SyncResponse[]);
       queryClient.invalidateQueries({ queryKey: ["bank-transactions"] });
       // Also invalidate summary/player data since bank transactions might affect ledgers
       queryClient.invalidateQueries({ queryKey: ["players"] });
@@ -240,14 +246,14 @@ export const TransactionsPage = () => {
             let queued = 0;
             let message = "Sync completed successfully.";
             
-            if (Array.isArray(syncResult) && syncResult.length > 0) {
-              posted = syncResult.reduce((sum, r) => sum + (r?.posted || 0), 0);
-              queued = syncResult.reduce((sum, r) => sum + (r?.queued || 0), 0);
-              if (syncResult[0]?.message) message = syncResult[0].message;
+            if (Array.isArray(syncResult)) {
+              posted = syncResult.reduce((sum, r) => sum + (r.posted || 0), 0);
+              queued = syncResult.reduce((sum, r) => sum + (r.queued || 0), 0);
+              const firstMsg = syncResult[0]?.message;
+              if (firstMsg) message = firstMsg;
               else if (posted === 0 && queued === 0) message = "No new transactions found.";
               else message = `Processed ${posted + queued} transactions.`;
-            } else if (syncResult && typeof syncResult === 'object') {
-              // PocketSmith via n8n might wrap it in some data object, but let's assume flat
+            } else {
               posted = syncResult.posted || 0;
               queued = syncResult.queued || 0;
               if (syncResult.message) message = syncResult.message;
