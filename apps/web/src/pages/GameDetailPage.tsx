@@ -187,8 +187,12 @@ export const GameDetailPage = () => {
       setShowAddPlayer(false);
       addToast("success", "Player added to game.");
     },
-    onError: (err: any) => {
-      const msg = err?.response?.data?.message ?? "Failed to add player.";
+    onError: (err: unknown) => {
+      const error = err as { response?: { data?: { message?: string } } };
+      const msg =
+        err instanceof Error
+          ? err.message
+          : error.response?.data?.message ?? "Failed to add player.";
       addToast("error", msg);
     },
   });
@@ -363,7 +367,10 @@ export const GameDetailPage = () => {
                 ? "Paid"
                 : "Unpaid";
           return (
-            <StatusBadge variant={variant as any} dot>
+            <StatusBadge
+              variant={variant as "success" | "warning" | "danger"}
+              dot
+            >
               {label}
             </StatusBadge>
           );
@@ -423,7 +430,7 @@ export const GameDetailPage = () => {
         },
       },
     ],
-    [removePlayerMutation, paymentStatus],
+    [removePlayerMutation, paymentStatus, manualPaymentMutation],
   );
 
   if (isLoading)

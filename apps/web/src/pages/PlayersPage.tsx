@@ -81,13 +81,14 @@ export const PlayersPage = () => {
     },
   });
 
+  const allPlayers = data?.data;
   const filteredPlayers = useMemo(() => {
-    if (!data?.data) return [];
-    if (!search) return data.data;
-    return data.data.filter((p: Player) =>
+    if (!allPlayers) return [];
+    if (!search) return allPlayers;
+    return allPlayers.filter((p: Player) =>
       p.displayName.toLowerCase().includes(search.toLowerCase()),
     );
-  }, [data?.data, search]);
+  }, [allPlayers, search]);
 
   const handleCreatePlayer = () => {
     setShowPlayerModal(true);
@@ -251,7 +252,7 @@ export const PlayersPage = () => {
           </div>
         )}
 
-        <DataTable
+        <DataTable<Player>
           columns={columns}
           data={filteredPlayers}
           isLoading={isLoading}

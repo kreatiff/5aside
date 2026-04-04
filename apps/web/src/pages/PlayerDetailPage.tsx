@@ -205,11 +205,13 @@ export const PlayerDetailPage = () => {
         `Retroactively applied split rule to ${data.appliedCount} transaction${data.appliedCount === 1 ? "" : "s"}`,
       );
     },
-    onError: (error: any) => {
-      addToast(
-        "error",
-        error.response?.data?.message || "Failed to apply retroactive split",
-      );
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { message?: string } } };
+      const msg =
+        error instanceof Error
+          ? error.message
+          : err.response?.data?.message ?? "Failed to apply retroactive split";
+      addToast("error", msg);
     },
   });
   const manualPaymentMutation = useMutation({
@@ -351,7 +353,7 @@ export const PlayerDetailPage = () => {
         },
       },
     ],
-    [],
+    [manualPaymentMutation.isPending, deleteManualPaymentMutation.isPending],
   );
 
   const activeLedgerData: LedgerEntry[] = showAllLedger

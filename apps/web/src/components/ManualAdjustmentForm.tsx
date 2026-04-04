@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
@@ -37,14 +37,15 @@ export const ManualAdjustmentForm = ({ onSuccess }: { onSuccess: () => void }) =
     enabled: isAdjustmentOpen,
   });
 
-  useEffect(() => {
-    if (defaultPlayerId) {
-      setPlayerId(defaultPlayerId);
-    }
-  }, [defaultPlayerId]);
-
   const mutation = useMutation({
-    mutationFn: async (payload: any) => {
+    mutationFn: async (payload: {
+      paymentType: string;
+      direction: string;
+      amountCents: number;
+      date: string;
+      playerId?: string;
+      description?: string;
+    }) => {
       return api.post("/transactions/manual", payload);
     },
     onSuccess: () => {
@@ -53,7 +54,7 @@ export const ManualAdjustmentForm = ({ onSuccess }: { onSuccess: () => void }) =
       queryClient.invalidateQueries({ queryKey: ["players"] });
       onSuccess();
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       addToast("error", error.message || "Failed to record adjustment");
     },
   });
@@ -88,31 +89,37 @@ export const ManualAdjustmentForm = ({ onSuccess }: { onSuccess: () => void }) =
       <div className="form-group">
         <label className="form-label">Payment Type</label>
         <div className="select-wrapper">
-          <select
-            className="input-field"
-            value={paymentType}
-            onChange={(e) => setPaymentType(e.target.value as any)}
-            disabled={isLocked}
-          >
-            <option value="player">Player Payment / Refund</option>
-            <option value="game_fee">Venue Game Fee</option>
-            <option value="equipment">Equipment / Other Expense</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="form-row grid-2 gap-md">
-        <div className="form-group">
-          <label className="form-label">Direction</label>
-          <div className="select-wrapper">
             <select
               className="input-field"
-              value={direction}
-              onChange={(e) => setDirection(e.target.value as any)}
+              value={paymentType}
+              onChange={(e) =>
+                setPaymentType(
+                  e.target.value as "player" | "game_fee" | "equipment",
+                )
+              }
+              disabled={isLocked}
             >
-              <option value="incoming">Incoming (to us)</option>
-              <option value="outgoing">Outgoing (from us)</option>
+              <option value="player">Player Payment / Refund</option>
+              <option value="game_fee">Venue Game Fee</option>
+              <option value="equipment">Equipment / Other Expense</option>
             </select>
+          </div>
+        </div>
+
+        <div className="form-row grid-2 gap-md">
+          <div className="form-group">
+            <label className="form-label">Direction</label>
+            <div className="select-wrapper">
+              <select
+                className="input-field"
+                value={direction}
+                onChange={(e) =>
+                  setDirection(e.target.value as "incoming" | "outgoing")
+                }
+              >
+                <option value="incoming">Incoming (to us)</option>
+                <option value="outgoing">Outgoing (from us)</option>
+              </select>
           </div>
         </div>
 

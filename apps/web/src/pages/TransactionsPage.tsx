@@ -29,7 +29,7 @@ export const TransactionsPage = () => {
   const queryClient = useQueryClient();
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncResult, setSyncResult] = useState<Record<string, unknown> | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdjustmentOpen = searchParams.get("adjustment") === "true";
@@ -69,12 +69,13 @@ export const TransactionsPage = () => {
       }
 
       const result = await response.json();
-      setSyncResult(result);
+      setSyncResult(result as Record<string, unknown>);
       queryClient.invalidateQueries({ queryKey: ["bank-transactions"] });
       // Also invalidate summary/player data since bank transactions might affect ledgers
       queryClient.invalidateQueries({ queryKey: ["players"] });
-    } catch (error: any) {
-      setSyncError(error.message || "An unknown error occurred during sync");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred during sync";
+      setSyncError(message);
     } finally {
       setIsSyncing(false);
     }

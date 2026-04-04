@@ -1,14 +1,26 @@
 import { useState, useEffect } from "react";
 
-export function useIsMobile(breakpoint = 640): boolean {
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== "undefined" && window.innerWidth <= breakpoint,
-  );
+/**
+ * Hook to detect if the screen is mobile sized (typically < 768px for Lucide/UI patterns)
+ * @returns {boolean} Whether the screen is mobile or not
+ */
+export function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
   useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, [breakpoint]);
+    const checkMobile = () => {
+      // 768px is the common md breakpoint
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    // Initial check
+    checkMobile();
+
+    // Event listener for resize
+    window.addEventListener("resize", checkMobile);
+
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   return isMobile;
 }

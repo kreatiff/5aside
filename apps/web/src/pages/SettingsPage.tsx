@@ -48,12 +48,15 @@ export const SettingsPage = () => {
   useEffect(() => {
     if (settings) {
       const s = settings.settings ?? settings;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFeeInput(((s.currentGameFeeCents ?? s.current_game_fee_cents ?? 0) / 100).toString());
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setVenueFeeInput(((s.venueGameFeeCents ?? s.venue_game_fee_cents ?? 0) / 100).toString());
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCutoffInput(s.cutoffDate ?? s.cutoff_date ?? "");
+      requestAnimationFrame(() => {
+        setFeeInput(
+          ((s.currentGameFeeCents ?? s.current_game_fee_cents ?? 0) / 100).toString(),
+        );
+        setVenueFeeInput(
+          ((s.venueGameFeeCents ?? s.venue_game_fee_cents ?? 0) / 100).toString(),
+        );
+        setCutoffInput(s.cutoffDate ?? s.cutoff_date ?? "");
+      });
     }
   }, [settings]);
 

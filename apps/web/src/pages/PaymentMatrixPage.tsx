@@ -114,10 +114,12 @@ export const PaymentMatrixPage = () => {
     },
   });
 
-  const games = matrix?.games ?? [];
-  const players = matrix?.players ?? [];
+  const games = useMemo(() => matrix?.games ?? [], [matrix?.games]);
+  const players = useMemo(() => matrix?.players ?? [], [matrix?.players]);
 
-  const gameSummaries = useMemo(() => {
+  const gameSummaries = useMemo<
+    { totalExpected: number; totalPaid: number; pct: number }[]
+  >(() => {
     if (!games.length || !players.length) return [];
     return games.map((_game, gi) => {
       let totalExpected = 0;
@@ -317,9 +319,12 @@ export const PaymentMatrixPage = () => {
 
                       {/* Game cells */}
                       {player.cells.map((cell, gi) => {
+                        const game = games[gi];
+                        if (!game) return null;
+
                         if (!cell) {
                           return (
-                            <td key={games[gi]!.id} className="pm-cell">
+                            <td key={game.id} className="pm-cell">
                               <span
                                 style={{
                                   color: "var(--text-muted)",
@@ -342,7 +347,7 @@ export const PaymentMatrixPage = () => {
 
                         return (
                           <td
-                            key={games[gi]!.id}
+                            key={game.id}
                             className="pm-cell pm-cell--clickable"
                             title={tooltip}
                             onClick={() => navigate(`/games/${cell.gameId}`)}
@@ -383,10 +388,13 @@ export const PaymentMatrixPage = () => {
                       </span>
                     </td>
 
-                    {gameSummaries.map((summary, gi) => (
-                      <td
-                        key={games[gi]!.id}
-                        className="pm-cell"
+                    {gameSummaries.map((summary, gi) => {
+                      const game = games[gi];
+                      if (!game) return null;
+                      return (
+                        <td
+                          key={game.id}
+                          className="pm-cell"
                         style={{ cursor: "default", borderBottom: "none" }}
                         title={`${formatCurrency(summary.totalPaid)} / ${formatCurrency(summary.totalExpected)}`}
                       >
@@ -403,8 +411,9 @@ export const PaymentMatrixPage = () => {
                         >
                           {summary.pct}%
                         </span>
-                      </td>
-                    ))}
+                        </td>
+                      );
+                    })}
                   </tr>
                 )}
               </tbody>

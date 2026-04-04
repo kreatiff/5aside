@@ -347,8 +347,12 @@ export const GamesPage = () => {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["games"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      const successful = result.updated.filter((r: any) => r.success).length;
-      const failed = result.updated.filter((r: any) => !r.success).length;
+      const successful = result.updated.filter(
+        (r: { success: boolean }) => r.success,
+      ).length;
+      const failed = result.updated.filter(
+        (r: { success: boolean }) => !r.success,
+      ).length;
       if (failed > 0) {
         addToast(
           "info",

@@ -12,7 +12,8 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function PWAPrompts() {
-  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installEvent, setInstallEvent] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [installDismissed, setInstallDismissed] = useState(() => {
     try {
       return localStorage.getItem("pwa-install-dismissed") === "true";
@@ -86,10 +87,7 @@ export function PWAPrompts() {
           >
             <RefreshCw size={16} />
             <span>A new version is available.</span>
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={handleUpdate}
-            >
+            <button className="btn btn-sm btn-primary" onClick={handleUpdate}>
               Update now
             </button>
             <button
@@ -118,10 +116,7 @@ export function PWAPrompts() {
               <strong>Add to Home Screen</strong>
               <span>Install for quick access, even offline.</span>
             </div>
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={handleInstall}
-            >
+            <button className="btn btn-sm btn-primary" onClick={handleInstall}>
               <Download size={14} />
               Install
             </button>

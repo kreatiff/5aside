@@ -1,5 +1,6 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
@@ -16,10 +17,12 @@ import {
   ChevronRight,
   MoreHorizontal,
   X,
+  ShieldAlert,
+  RotateCw,
 } from "lucide-react";
 import { getInitials } from "../utils/format";
-import { useIsMobile } from "../utils/useIsMobile";
-import { PWAPrompts } from "./PWAPrompts";
+import { useIsMobile } from "../utils/useIsMobile.ts";
+import { PWAPrompts } from "./PWAPrompts.tsx";
 
 const SoccerBall = ({ size = 20 }: { size?: number }) => (
   <svg
@@ -36,6 +39,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="M12 0.75A11.25 11.25 0 1 0 23.25 12 11.25 11.25 0 0 0 12 0.75Z"
       fill="none"
       stroke="currentColor"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -43,6 +47,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m8.895 16.754 -1.91 -5.9L12 7.208l5.015 3.646 -1.91 5.9 -6.21 0z"
       fill="none"
+      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -52,6 +57,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="M16.301 1.601 12 4.5 7.699 1.601"
       fill="none"
       stroke="currentColor"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -59,6 +65,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m14.599 22.948 2.139 -4.366 4.884 -0.75"
       fill="none"
+      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -68,6 +75,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="m23.214 12.909 -3.427 -3.413 0.735 -4.839"
       fill="none"
       stroke="currentColor"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -75,6 +83,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m12 4.5 0 2.708"
       fill="none"
+      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -84,6 +93,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="m17.015 10.854 2.772 -1.358"
       fill="none"
       stroke="currentColor"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -91,6 +101,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m0.786 12.909 3.427 -3.413 -0.735 -4.839"
       fill="none"
+      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -100,6 +111,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="M6.985 10.854 4.213 9.496"
       fill="none"
       stroke="currentColor"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -107,6 +119,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m15.105 16.754 1.633 1.828"
       fill="none"
+      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -116,6 +129,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
       d="m9.401 22.948 -2.139 -4.366 -4.884 -0.75"
       fill="none"
       stroke="currentColor"
+      stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="1.5"
@@ -123,6 +137,7 @@ const SoccerBall = ({ size = 20 }: { size?: number }) => (
     <path
       d="m8.895 16.754 -1.633 1.828"
       fill="none"
+      stroke="currentColor"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -147,7 +162,6 @@ const moreRoutes = [
   { path: "/settings", name: "Settings", icon: Settings },
 ];
 
-// All routes (for desktop sidebar)
 const routes = [
   { path: "/dashboard", name: "Dashboard", icon: LayoutDashboard },
   { path: "/players", name: "Players", icon: Users },
@@ -166,6 +180,8 @@ export const Layout = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem("sidebar-collapsed") === "true";
@@ -174,6 +190,21 @@ export const Layout = ({ children }: { children: ReactNode }) => {
     }
   });
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  useEffect(() => {
+    const handleAuthFailure = () => {
+      setSessionExpired(true);
+    };
+
+    window.addEventListener("auth-failure", handleAuthFailure);
+    return () => window.removeEventListener("auth-failure", handleAuthFailure);
+  }, []);
+
+  const handleReauthenticate = () => {
+    // Force a full page reload to trigger Cloudflare Access login
+    window.location.reload();
+  };
 
   useEffect(() => {
     try {
@@ -184,15 +215,23 @@ export const Layout = ({ children }: { children: ReactNode }) => {
   }, [collapsed]);
 
   // Close more sheet on navigation
+  // Close sheet on route change, but deferred to avoid cascading render lint
   useEffect(() => {
-    setMoreSheetOpen(false);
-  }, [location.pathname]);
+    if (moreSheetOpen) {
+      requestAnimationFrame(() => {
+        setMoreSheetOpen(false);
+      });
+    }
+  }, [location.pathname, moreSheetOpen]);
 
   const { data: reconData } = useQuery({
     queryKey: ["recon-queue-count"],
     queryFn: async () => {
-      const { data } = await api.get("/reconciliation-queue?limit=100");
-      return data as { items: unknown[]; total: number };
+      const { data } = await api.get<{
+        items: Record<string, unknown>[];
+        total: number;
+      }>("/reconciliation-queue?limit=100");
+      return data;
     },
     refetchInterval: 60000,
   });
@@ -205,10 +244,48 @@ export const Layout = ({ children }: { children: ReactNode }) => {
     location.pathname.startsWith(r.path),
   );
 
+  // Is any "more" route currently active?
+  const moreIsActive = moreRoutes.some((r) =>
+    location.pathname.startsWith(r.path),
+  );
+
   return (
     <>
-    <PWAPrompts />
-    <div className="app-layout">
+      <PWAPrompts />
+      
+      <AnimatePresence>
+        {sessionExpired && (
+          <motion.div 
+            className="session-expired-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div 
+              className="session-expired-card"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.1 }}
+            >
+              <div className="session-expired-icon">
+                <ShieldAlert size={32} />
+              </div>
+              <h3>Session Expired</h3>
+              <p>Your Cloudflare Access session has expired. Please re-authenticate to continue.</p>
+              <button 
+                className="btn-primary btn-full" 
+                onClick={handleReauthenticate}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+              >
+                <RotateCw size={18} />
+                Re-authenticate
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="app-layout">
       {/* Sidebar (desktop only) */}
       <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
         <button
@@ -372,7 +449,7 @@ export const Layout = ({ children }: { children: ReactNode }) => {
                         <button
                           key={route.path}
                           className={`more-sheet-item ${isActive ? "active" : ""}`}
-                          onClick={() => {
+                           onClick={() => {
                             navigate(route.path);
                             setMoreSheetOpen(false);
                           }}
@@ -397,6 +474,7 @@ export const Layout = ({ children }: { children: ReactNode }) => {
         </>
       )}
     </div>
+    </>
     </>
   );
 };

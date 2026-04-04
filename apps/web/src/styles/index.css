@@ -2270,7 +2270,7 @@ input[type="checkbox"] {
 }
 
 .pwa-banner--update {
-  top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
+  top: var(--spacing-md);
   border-left: 3px solid var(--primary);
   max-width: 480px;
   margin: 0 auto;
@@ -2379,7 +2379,7 @@ input[type="checkbox"] {
 
   /* Main content fills full width, leave room for bottom nav */
   .main-content {
-    padding: calc(var(--spacing-md) + env(safe-area-inset-top, 0px)) var(--spacing-md);
+    padding: var(--spacing-md);
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px) + var(--spacing-md));
   }
 
@@ -2819,31 +2819,62 @@ input[type="checkbox"] {
 }
 
 /* ========================================================================
-   Dashboard Utilities
+   Session Expired Overlay
    ======================================================================== */
 
-.dashboard-split {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 2rem;
-  margin-bottom: var(--spacing-lg);
+.session-expired-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(249, 249, 248, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-lg);
 }
 
-.quick-actions-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
+.session-expired-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-2xl);
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
 }
 
-@media (max-width: 900px) {
-  .dashboard-split {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
+.session-expired-icon {
+  width: 64px;
+  height: 64px;
+  background-color: var(--danger-50);
+  color: var(--danger);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--spacing-lg);
 }
 
-@media (max-width: 500px) {
-  .quick-actions-grid {
-    grid-template-columns: 1fr;
-  }
+.session-expired-card h3 {
+  font-family: var(--font-family-display);
+  font-size: var(--font-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.session-expired-card p {
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-xl);
+  line-height: 1.6;
+}
+
+.btn-full {
+  width: 100%;
 }
