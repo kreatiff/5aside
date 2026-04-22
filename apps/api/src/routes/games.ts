@@ -482,13 +482,29 @@ export async function gameRoutes(app: FastifyInstance) {
         }
       }
 
-      // Auto-transition pending → synced after successful import
-      if (imported > 0) {
+      // Auto-transition pending → synced after successful import.
+      // Check both newly imported rows AND pre-existing attendance rows — if
+      // the import was re-run all players may already be present (ON CONFLICT
+      // DO NOTHING), keeping `imported` at 0 even though the game IS synced.
+      if (imported > 0 || queued > 0) {
         await client.query(
           `UPDATE games SET status = 'synced', updated_at = NOW()
            WHERE id = $1 AND status = 'pending'`,
           [gameId]
         );
+      } else {
+        // Re-run scenario: no new rows inserted but attendance may already exist
+        const existingCount = await client.query<{ count: string }>(
+          `SELECT COUNT(*)::text AS count FROM attendance WHERE game_id = $1`,
+          [gameId]
+        );
+        if (Number(existingCount.rows[0]?.count) > 0) {
+          await client.query(
+            `UPDATE games SET status = 'synced', updated_at = NOW()
+             WHERE id = $1 AND status = 'pending'`,
+            [gameId]
+          );
+        }
       }
 
       return { imported, charged, queued };
