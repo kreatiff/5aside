@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
-import { Banknote, RefreshCw } from "lucide-react";
+import { Banknote, RefreshCw, Plus, Search, User } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { DataTable, type Column } from "../components/DataTable";
@@ -10,8 +10,6 @@ import { Modal } from "../components/Modal";
 import { Drawer } from "../components/Drawer";
 import { ManualAdjustmentForm } from "../components/ManualAdjustmentForm";
 import { formatCurrency, formatDate } from "../utils/format";
-import { useSearchParams } from "react-router-dom";
-import { Plus } from "lucide-react";
 
 type BankTransaction = {
   id: string;
@@ -23,6 +21,12 @@ type BankTransaction = {
   matchedPlayerName: string | null;
   status: "matched" | "pending" | "dismissed";
   createdAt: string;
+};
+
+type Player = {
+  id: string;
+  displayName: string;
+  currentBalanceCents: number;
 };
 
 type SyncResponse = {
@@ -38,6 +42,8 @@ export const TransactionsPage = () => {
   const [syncResult, setSyncResult] = useState<SyncResponse | SyncResponse[] | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPlayerId, setSelectedPlayerId] = useState("");
   const isAdjustmentOpen = searchParams.get("adjustment") === "true";
 
   const { data, isLoading } = useQuery({
@@ -48,10 +54,37 @@ export const TransactionsPage = () => {
     },
   });
 
-  const transactions: BankTransaction[] = useMemo(
-    () => data?.data ?? [],
-    [data],
-  );
+  const { data: playersData } = useQuery({
+    queryKey: ["players", "all"],
+    queryFn: async () => {
+      const { data } = await api.get<{ data: Player[] }>("/players?limit=10000");
+      return data;
+    },
+  });
+
+  const transactions: BankTransaction[] = useMemo(() => {
+    let txs = data?.data ?? [];
+    
+    if (selectedPlayerId) {
+      if (selectedPlayerId === "unmatched") {
+        txs = txs.filter((tx: BankTransaction) => !tx.matchedPlayerId);
+      } else {
+        txs = txs.filter((tx: BankTransaction) => tx.matchedPlayerId === selectedPlayerId);
+      }
+    }
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      txs = txs.filter((tx: BankTransaction) => 
+        tx.description.toLowerCase().includes(query) ||
+        (tx.amountCents / 100).toFixed(2).includes(query) ||
+        (tx.matchedPlayerName && tx.matchedPlayerName.toLowerCase().includes(query)) ||
+        (tx.externalTxnId && tx.externalTxnId.toLowerCase().includes(query))
+      );
+    }
+    
+    return txs;
+  }, [data, searchQuery, selectedPlayerId]);
 
   const handleSync = async () => {
     setIsSyncModalOpen(true);
@@ -196,6 +229,35 @@ export const TransactionsPage = () => {
         }
       />
 
+      <div className="flex gap-md mb-lg">
+        <div className="input-with-icon flex-1" style={{ maxWidth: '300px' }}>
+          <Search size={16} className="icon" />
+          <input
+            type="text"
+            className="input-field pl-xl"
+            placeholder="Search transactions..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className="select-wrapper flex-1" style={{ maxWidth: '250px' }}>
+          <User size={16} className="icon-left" />
+          <select
+            className="input-field pl-xl"
+            value={selectedPlayerId}
+            onChange={(e) => setSelectedPlayerId(e.target.value)}
+          >
+            <option value="">All Players</option>
+            <option value="unmatched">Unmatched Only</option>
+            {playersData?.data.map((p: Player) => (
+              <option key={p.id} value={p.id}>
+                {p.displayName}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <DataTable<BankTransaction>
         columns={columns}
         data={transactions}
@@ -203,8 +265,8 @@ export const TransactionsPage = () => {
         getRowId={(tx) => tx.id}
         mobileLayout="cards"
         emptyIcon={<Banknote size={48} />}
-        emptyTitle="No transactions yet"
-        emptyDescription="Import bank transactions via CSV or the Pocketsmith webhook."
+        emptyTitle="No transactions found"
+        emptyDescription={searchQuery || selectedPlayerId ? "Try adjusting your filters." : "Import bank transactions via CSV or the Pocketsmith webhook."}
       />
 
       <Modal
@@ -326,6 +388,12 @@ export const TransactionsPage = () => {
         .w-full {
           width: 100%;
         }
+        .pl-xl { padding-left: 2.5rem !important; }
+        .input-with-icon { position: relative; display: flex; align-items: center; }
+        .input-with-icon .icon { position: absolute; left: 1rem; color: var(--text-secondary); pointer-events: none; }
+        .select-wrapper { position: relative; display: flex; align-items: center; }
+        .icon-left { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none; z-index: 1; }
+        .mb-lg { margin-bottom: var(--spacing-lg); }
       `}</style>
     </>
   );
