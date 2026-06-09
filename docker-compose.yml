@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: 5aside-app:latest
     container_name: 5aside
     restart: unless-stopped
     ports:
