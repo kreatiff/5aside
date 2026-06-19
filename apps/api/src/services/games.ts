@@ -1,5 +1,42 @@
+import type { PoolClient } from "pg";
 import { query } from "../db/helpers.js";
 import { pairPaymentsToCharges, type ChargeEntry, type PaymentEntry, type GamePaymentStatus } from "./payment-pairing.js";
+
+/**
+ * Mark a game 'synced' once it actually has attendance on file, and return the
+ * resulting attendance count.
+ *
+ * Transitions from BOTH 'scheduled' and 'pending':
+ *  - 'scheduled' — the Facebook attendance webhook normally fires on game day,
+ *    while the game is still 'scheduled' (the scheduled→pending auto-flip only
+ *    happens lazily in GET /api/games once game_date < today). Transitioning
+ *    only from 'pending' meant freshly-synced games never reached 'synced' and
+ *    later got stuck on 'pending' after the date passed.
+ *  - 'pending' — normal post-date sync, plus re-runs where every row hits
+ *    ON CONFLICT DO NOTHING (so `imported` stays 0 even though the game IS synced).
+ *
+ * Keyed off the resulting attendance count — never off `imported` — so it is
+ * correct for first imports, re-runs and queued-only imports alike. A game with
+ * no attendance is left un-synced (correctly flagged as still needing a sync).
+ *
+ * Shared by the webhook (imports.ts) and the manual import route (games.ts) so
+ * the two paths cannot drift apart.
+ */
+export async function markGameSyncedIfAttendanceExists(client: PoolClient, gameId: string): Promise<number> {
+  const result = await client.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM attendance WHERE game_id = $1`,
+    [gameId]
+  );
+  const count = Number(result.rows[0]?.count ?? 0);
+  if (count > 0) {
+    await client.query(
+      `UPDATE games SET status = 'synced', updated_at = NOW()
+       WHERE id = $1 AND status IN ('scheduled', 'pending')`,
+      [gameId]
+    );
+  }
+  return count;
+}
 
 export type PlayerPaymentStatus = {
   playerId: string;

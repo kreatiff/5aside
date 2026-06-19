@@ -16,7 +16,11 @@
       "Bash(source .env)",
       "Bash(export DATABASE_URL)",
       "Bash(psql \"$DATABASE_URL\" -c \"SELECT name FROM pgmigrations ORDER BY run_on;\")",
-      "mcp__19b81b1f-fd52-4637-9244-fff317d25cba__list_projects"
+      "mcp__19b81b1f-fd52-4637-9244-fff317d25cba__list_projects",
+      "Bash(node -e \"import\\('pg'\\).then\\(\\(\\)=>console.log\\('pg OK'\\)\\).catch\\(e=>console.log\\('pg MISSING:', e.message\\)\\)\")",
+      "Bash(npm run *)",
+      "Bash(npx eslint *)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

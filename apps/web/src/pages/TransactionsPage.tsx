@@ -67,7 +67,8 @@ export const TransactionsPage = () => {
     
     if (selectedPlayerId) {
       if (selectedPlayerId === "unmatched") {
-        txs = txs.filter((tx: BankTransaction) => !tx.matchedPlayerId);
+        // Unmatched should not have a player, AND should not be 'matched' to a venue category
+        txs = txs.filter((tx: BankTransaction) => !tx.matchedPlayerId && tx.status !== "matched");
       } else {
         txs = txs.filter((tx: BankTransaction) => tx.matchedPlayerId === selectedPlayerId);
       }
@@ -76,7 +77,7 @@ export const TransactionsPage = () => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       txs = txs.filter((tx: BankTransaction) => 
-        tx.description.toLowerCase().includes(query) ||
+        (tx.description && tx.description.toLowerCase().includes(query)) ||
         (tx.amountCents / 100).toFixed(2).includes(query) ||
         (tx.matchedPlayerName && tx.matchedPlayerName.toLowerCase().includes(query)) ||
         (tx.externalTxnId && tx.externalTxnId.toLowerCase().includes(query))
@@ -229,8 +230,8 @@ export const TransactionsPage = () => {
         }
       />
 
-      <div className="flex gap-md mb-lg">
-        <div className="input-with-icon flex-1" style={{ maxWidth: '300px' }}>
+      <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+        <div className="input-with-icon" style={{ flex: 2, minWidth: '300px', maxWidth: '600px' }}>
           <Search size={16} className="icon" />
           <input
             type="text"
@@ -240,7 +241,7 @@ export const TransactionsPage = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="select-wrapper flex-1" style={{ maxWidth: '250px' }}>
+        <div className="select-wrapper" style={{ flex: '0 0 250px' }}>
           <User size={16} className="icon-left" />
           <select
             className="input-field pl-xl"

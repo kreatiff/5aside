@@ -6,6 +6,7 @@ import { parseBody, assertWebhookSecret } from "../utils/request.js";
 import { withTransaction, query } from "../db/helpers.js";
 import { processBankRows } from "../services/bank-import.js";
 import { insertLedgerEntry } from "../services/ledger.js";
+import { markGameSyncedIfAttendanceExists } from "../services/games.js";
 
 /** Convert dd/mm/yyyy or yyyy-mm-dd to ISO datetime string */
 function parseCsvDate(raw: string): string {
@@ -260,6 +261,11 @@ export async function importRoutes(app: FastifyInstance) {
       let imported = 0;
       let charged = 0;
       let queued = 0;
+      // Names for the result report: the matched "going" roster (canonical display
+      // names) and the raw names that didn't match any player.
+      const playerNameById = new Map(players.rows.map((p) => [p.id, p.display_name]));
+      const syncedPlayers: string[] = [];
+      const unmatchedNames: string[] = [];
 
       for (const row of body.rows) {
         const match = matchPlayerByAlias(row.playerName, candidates);
@@ -270,10 +276,16 @@ export async function importRoutes(app: FastifyInstance) {
             [body.gameId, JSON.stringify(row), match.playerId, match.confidence, match.reason, importId]
           );
           queued += 1;
+          unmatchedNames.push(row.playerName);
           continue;
         }
 
         const chargeable = isChargeableStatus(row.sourceStatus);
+        // Record the full going roster (matched), including players already on
+        // file — so a re-sync still reports who is in the game.
+        if (chargeable) {
+          syncedPlayers.push(playerNameById.get(match.playerId) ?? row.playerName);
+        }
         const attendance = await client.query<{ id: string }>(
           `INSERT INTO attendance (game_id, player_id, source_status, chargeable, source_ref, import_id)
            VALUES ($1, $2, $3, $4, $5, $6)
@@ -299,17 +311,27 @@ export async function importRoutes(app: FastifyInstance) {
         }
       }
 
-      // Update game status from pending -> synced after successful attendance import
-      if (imported > 0) {
-        await client.query(
-          `UPDATE games SET status = 'synced', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
-          [body.gameId]
-        );
-      }
+      // Mark the game synced once attendance exists. Handles games still
+      // 'scheduled' at sync time and idempotent re-runs — see the helper.
+      const attendanceCount = await markGameSyncedIfAttendanceExists(client, body.gameId);
 
-      await client.query(`UPDATE imports SET status = 'completed', completed_at = NOW() WHERE id = $1`, [importId]);
+      // Misrouted-payload guard: a non-empty roster that applied nothing, queued
+      // nothing, and left the game with no attendance means every (game, player)
+      // pair already existed — i.e. this roster was sent with the WRONG gameId
+      // (it collided with a game that already has these players). Surface it on
+      // the import instead of silently reporting "completed".
+      const misrouted =
+        body.rows.length > 0 && imported === 0 && queued === 0 && attendanceCount === 0;
+      const warning = misrouted
+        ? `Received ${body.rows.length} attendance rows but applied 0 and this game has no attendance — the roster was almost certainly sent with the wrong gameId.`
+        : null;
 
-      return { imported, charged, queued, importId };
+      await client.query(
+        `UPDATE imports SET status = $2, completed_at = NOW(), error_summary = $3 WHERE id = $1`,
+        [importId, misrouted ? "failed" : "completed", warning]
+      );
+
+      return { imported, charged, queued, importId, warning, players: syncedPlayers, unmatched: unmatchedNames };
     });
 
     reply.code(201);

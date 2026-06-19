@@ -130,40 +130,84 @@ const columns: Column<Game>[] = [
     ),
   },
   {
-    key: "paymentStatus",
-    header: "PAYMENT STATUS",
+    key: "syncStatus",
+    header: "SYNC",
     render: (game) => {
-      const pct =
-        game.totalExpectedCents > 0
-          ? Math.round((game.totalPaidCents / game.totalExpectedCents) * 100)
-          : 0;
-
-      let statusLabel = "PENDING";
-      let statusColor = "var(--text-muted)";
-      let squareColor = "#e5e7eb"; // light gray
-
       const today = new Date().toISOString().slice(0, 10);
+      const isPast = game.gameDate < today;
 
-      if (game.totalExpectedCents > 0) {
-        if (pct >= 100) {
-          statusLabel = "SETTLED";
-          statusColor = "var(--primary)";
-          squareColor = "var(--primary)";
-        } else if (pct > 0) {
-          statusLabel = `PARTIAL (${pct}%)`;
-          statusColor = "var(--warning)";
-          squareColor = "var(--warning)";
-        } else {
-          if (game.gameDate < today) {
-            statusLabel = "OVERDUE";
-            statusColor = "var(--danger)";
-            squareColor = "var(--danger)";
-          } else {
-            statusLabel = "PENDING";
-            statusColor = "var(--text-muted)";
-            squareColor = "#e5e7eb";
-          }
-        }
+      let label: string;
+      let variant: "success" | "warning" | "danger" | "info" | "neutral";
+      switch (game.status) {
+        case "synced":
+          label = "Synced";
+          variant = "success";
+          break;
+        case "cancelled":
+          label = "Cancelled";
+          variant = "neutral";
+          break;
+        case "scheduled":
+          label = "Scheduled";
+          variant = "info";
+          break;
+        case "pending":
+          // A past game still 'pending' never received its attendance — this is
+          // the actionable "the Facebook sync skipped this game" state.
+          label = isPast ? "Needs sync" : "Scheduled";
+          variant = isPast ? "danger" : "info";
+          break;
+        default:
+          label = game.status;
+          variant = "neutral";
+      }
+
+      return (
+        <StatusBadge variant={variant} dot>
+          {label}
+        </StatusBadge>
+      );
+    },
+  },
+  {
+    key: "paymentStatus",
+    header: "PAYMENT",
+    render: (game) => {
+      // Cancelled games and games with nothing charged have no payment to track.
+      if (game.status === "cancelled" || game.totalExpectedCents <= 0) {
+        return (
+          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+            —
+          </span>
+        );
+      }
+
+      const pct = Math.round(
+        (game.totalPaidCents / game.totalExpectedCents) * 100,
+      );
+      const today = new Date().toISOString().slice(0, 10);
+      const isPast = game.gameDate < today;
+
+      let statusLabel: string;
+      let statusColor: string;
+      let squareColor: string;
+      if (pct >= 100) {
+        statusLabel = "SETTLED";
+        statusColor = "var(--primary)";
+        squareColor = "var(--primary)";
+      } else if (pct > 0) {
+        statusLabel = `PARTIAL (${pct}%)`;
+        statusColor = "var(--warning)";
+        squareColor = "var(--warning)";
+      } else if (isPast) {
+        statusLabel = "OVERDUE";
+        statusColor = "var(--danger)";
+        squareColor = "var(--danger)";
+      } else {
+        // Charged but not yet due (future game).
+        statusLabel = "UNPAID";
+        statusColor = "var(--text-muted)";
+        squareColor = "#e5e7eb";
       }
 
       return (

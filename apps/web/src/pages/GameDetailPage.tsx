@@ -13,6 +13,7 @@ import {
   X,
   DollarSign,
   Copy,
+  RefreshCw,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { Modal } from "../components/Modal";
@@ -21,6 +22,12 @@ import { CurrencyDisplay } from "../components/CurrencyDisplay";
 import { DataTable, type Column } from "../components/DataTable";
 import { useToast } from "../contexts/ToastContext";
 import { formatDate, formatCurrency } from "../utils/format";
+import {
+  GAME_SYNC_WEBHOOK_URL,
+  type GameSyncResult,
+  canSyncGame,
+  buildGameSyncBody,
+} from "../utils/gameSync";
 
 type AttendanceRecord = {
   id: string;
@@ -102,6 +109,10 @@ export const GameDetailPage = () => {
   const [isEditingVenueFee, setIsEditingVenueFee] = useState(false);
   const [venueFeeInput, setVenueFeeInput] = useState("");
   const [importText, setImportText] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [syncResult, setSyncResult] = useState<GameSyncResult | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [addPlayerId, setAddPlayerId] = useState("");
   const [addChargeable, setAddChargeable] = useState(true);
@@ -253,6 +264,175 @@ export const GameDetailPage = () => {
     if (importText.trim()) {
       importAttendanceMutation.mutate(importText);
     }
+  };
+
+  // Trigger the n8n workflow to scrape this game's Facebook event and import
+  // attendance. The browser calls n8n directly (same pattern as bank sync);
+  // n8n POSTs the roster to /api/webhooks/facebook-attendance and returns its
+  // result here. Progress + the result report are shown in a modal.
+  const handleSyncFromFacebook = async () => {
+    if (!game || !canSyncGame(game) || !game.facebookEventUrl) return;
+    setIsSyncModalOpen(true);
+    setIsSyncing(true);
+    setSyncResult(null);
+    setSyncError(null);
+    try {
+      const res = await fetch(GAME_SYNC_WEBHOOK_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(buildGameSyncBody(game.id, game.facebookEventUrl)),
+      });
+      if (!res.ok) throw new Error(`Sync failed with status ${res.status}`);
+      const raw = (await res.json().catch(() => null)) as
+        | GameSyncResult
+        | GameSyncResult[]
+        | null;
+      // n8n "lastNode" responses can be a single object or a 1-element array.
+      setSyncResult(Array.isArray(raw) ? raw[0] ?? null : raw);
+
+      // Refresh everything a sync can affect.
+      queryClient.invalidateQueries({ queryKey: ["games", id] });
+      queryClient.invalidateQueries({
+        queryKey: ["games", id, "payment-status"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["games"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Body of the sync modal: spinner while loading, then a result report.
+  const renderSyncModalBody = () => {
+    if (isSyncing) {
+      return (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "1rem",
+            padding: "1.5rem 0",
+          }}
+        >
+          <RefreshCw size={32} className="spin" style={{ color: "var(--primary)" }} />
+          <p className="text-secondary">
+            Fetching the attendee list from Facebook…
+          </p>
+        </div>
+      );
+    }
+
+    if (syncError) {
+      return (
+        <div style={{ padding: "0.5rem 0" }}>
+          <p className="text-danger">
+            <strong>Sync failed.</strong> {syncError}
+          </p>
+          <p className="text-muted text-sm" style={{ marginTop: "0.5rem" }}>
+            The attendees may still have imported — close this and check the list
+            below, or try again.
+          </p>
+        </div>
+      );
+    }
+
+    if (!syncResult) return null;
+
+    const imported = syncResult.imported ?? 0;
+    const charged = syncResult.charged ?? 0;
+    const queued = syncResult.queued ?? 0;
+    const players = syncResult.players ?? [];
+    const unmatched = syncResult.unmatched ?? [];
+
+    return (
+      <div>
+        <div style={{ display: "flex", gap: "2rem", marginBottom: "1rem" }}>
+          {[
+            { label: "Imported", value: imported },
+            { label: "Charged", value: charged },
+            ...(queued > 0 ? [{ label: "Unmatched", value: queued }] : []),
+          ].map((s) => (
+            <div key={s.label}>
+              <div
+                style={{ fontSize: "1.75rem", fontWeight: 700, lineHeight: 1.1 }}
+              >
+                {s.value}
+              </div>
+              <div className="text-muted text-sm">{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {syncResult.warning && (
+          <p style={{ color: "var(--warning)", marginBottom: "0.75rem" }}>
+            {syncResult.warning}
+          </p>
+        )}
+
+        {imported === 0 && !syncResult.warning && (
+          <p className="text-secondary" style={{ marginBottom: "0.75rem" }}>
+            No new players were imported — they may already be in this game, or
+            none were marked “going”.
+          </p>
+        )}
+
+        {unmatched.length > 0 ? (
+          <p
+            className="text-secondary text-sm"
+            style={{ marginBottom: "0.75rem" }}
+          >
+            Didn’t match a player (now in the Reconciliation Queue):{" "}
+            <span style={{ color: "var(--warning)" }}>
+              {unmatched.join(", ")}
+            </span>
+          </p>
+        ) : (
+          queued > 0 && (
+            <p
+              className="text-secondary text-sm"
+              style={{ marginBottom: "0.75rem" }}
+            >
+              {queued} name{queued === 1 ? "" : "s"} didn’t match a player and{" "}
+              {queued === 1 ? "is" : "are"} waiting in the Reconciliation Queue.
+            </p>
+          )
+        )}
+
+        {players.length > 0 ? (
+          <div>
+            <h4 className="card-header__title" style={{ marginBottom: "0.5rem" }}>
+              Players synced ({players.length})
+            </h4>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.4rem",
+                maxHeight: "220px",
+                overflowY: "auto",
+              }}
+            >
+              {players.map((p) => (
+                <span key={p} className="badge badge-neutral">
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-muted text-sm">
+            Updated attendees are listed in the table below.
+          </p>
+        )}
+      </div>
+    );
   };
 
   const handleAddPlayer = (e: React.FormEvent) => {
@@ -620,10 +800,26 @@ export const GameDetailPage = () => {
             <h3 className="card-header__title">
               <Upload size={20} /> Import Facebook Poll
             </h3>
+            {game.status !== "cancelled" && (
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={handleSyncFromFacebook}
+                disabled={isSyncing || !canSyncGame(game)}
+                title={
+                  canSyncGame(game)
+                    ? "Fetch the attendee list automatically from Facebook"
+                    : "No Facebook event linked to this game"
+                }
+              >
+                <RefreshCw size={16} className={isSyncing ? "spin" : ""} />
+                {isSyncing ? "Syncing…" : "Sync from Facebook"}
+              </button>
+            )}
           </div>
           <p className="text-secondary mb-md">
-            Copy and paste the attendee list from the Facebook event poll. Our
-            engine will map names automatically.
+            Pull the attendee list automatically with <strong>Sync from
+            Facebook</strong>, or copy and paste it from the event poll below.
+            Our engine maps names automatically.
           </p>
           <form onSubmit={handleImportSubmit}>
             <div className="form-group">
@@ -794,6 +990,25 @@ export const GameDetailPage = () => {
           emptyDescription="Import a Facebook poll or add attendance manually."
         />
       </div>
+
+      <Modal
+        isOpen={isSyncModalOpen}
+        onClose={() => {
+          if (!isSyncing) setIsSyncModalOpen(false);
+        }}
+        title="Sync from Facebook"
+        footer={
+          <button
+            className="btn btn-primary"
+            onClick={() => setIsSyncModalOpen(false)}
+            disabled={isSyncing}
+          >
+            {isSyncing ? "Syncing…" : "Done"}
+          </button>
+        }
+      >
+        {renderSyncModalBody()}
+      </Modal>
 
       <Modal
         isOpen={!!confirmPaymentData}

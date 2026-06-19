@@ -9,7 +9,7 @@ import { insertLedgerEntry } from "../services/ledger.js";
 import { extractFacebookEventId } from "../utils/facebook.js";
 import { generateGameDates } from "../utils/dates.js";
 import { pairPaymentsToCharges, type ChargeEntry, type PaymentEntry } from "../services/payment-pairing.js";
-import { calculateGamePaymentStatus, getLatestGameId } from "../services/games.js";
+import { calculateGamePaymentStatus, getLatestGameId, markGameSyncedIfAttendanceExists } from "../services/games.js";
 
 const GAME_COLS = `id, external_event_id, facebook_event_url, game_date, kickoff_at_utc, fee_cents, venue_fee_cents, source, status, created_at, updated_at`;
 
@@ -482,30 +482,10 @@ export async function gameRoutes(app: FastifyInstance) {
         }
       }
 
-      // Auto-transition pending → synced after successful import.
-      // Check both newly imported rows AND pre-existing attendance rows — if
-      // the import was re-run all players may already be present (ON CONFLICT
-      // DO NOTHING), keeping `imported` at 0 even though the game IS synced.
-      if (imported > 0 || queued > 0) {
-        await client.query(
-          `UPDATE games SET status = 'synced', updated_at = NOW()
-           WHERE id = $1 AND status = 'pending'`,
-          [gameId]
-        );
-      } else {
-        // Re-run scenario: no new rows inserted but attendance may already exist
-        const existingCount = await client.query<{ count: string }>(
-          `SELECT COUNT(*)::text AS count FROM attendance WHERE game_id = $1`,
-          [gameId]
-        );
-        if (Number(existingCount.rows[0]?.count) > 0) {
-          await client.query(
-            `UPDATE games SET status = 'synced', updated_at = NOW()
-             WHERE id = $1 AND status = 'pending'`,
-            [gameId]
-          );
-        }
-      }
+      // Mark the game synced once attendance exists — handles first imports,
+      // re-runs (ON CONFLICT DO NOTHING) and games still 'scheduled' at import
+      // time. Shared with the Facebook webhook so the two paths stay in sync.
+      await markGameSyncedIfAttendanceExists(client, gameId);
 
       return { imported, charged, queued };
     });
