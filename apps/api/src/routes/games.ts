@@ -249,38 +249,47 @@ export async function gameRoutes(app: FastifyInstance) {
     const body = parseBody(reply, GameBatchUpdateSchema, request.body);
 
     const result = await withTransaction(async (client) => {
+      // 1. Fetch all games and lock them
+      const gamesResult = await client.query<GameRow>(
+        `SELECT ${GAME_COLS} FROM games WHERE id = ANY($1) FOR UPDATE`,
+        [body.gameIds]
+      );
+      const gamesMap = new Map(gamesResult.rows.map(g => [g.id, g]));
+
+      // 2. Fetch all games that have charges
+      const chargesResult = await client.query<{ game_id: string }>(
+        `SELECT game_id FROM ledger_entries WHERE game_id = ANY($1) AND type = 'charge' GROUP BY game_id`,
+        [body.gameIds]
+      );
+      const gamesWithCharges = new Set(chargesResult.rows.map(r => r.game_id));
+
       const updated: Array<{ gameId: string; success: boolean; reason?: string }> = [];
+      const successfulIds: string[] = [];
 
       for (const gameId of body.gameIds) {
-        const gameResult = await client.query<GameRow>(
-          `SELECT ${GAME_COLS} FROM games WHERE id = $1 FOR UPDATE`,
-          [gameId]
-        );
-        if (gameResult.rowCount === 0) {
+        const game = gamesMap.get(gameId);
+        if (!game) {
           updated.push({ gameId, success: false, reason: "Game not found" });
           continue;
         }
 
-        const game = gameResult.rows[0]!;
-
-        // Check if fee can be edited
-        const charges = await client.query<{ count: string }>(
-          `SELECT COUNT(*)::text AS count FROM ledger_entries WHERE game_id = $1 AND type = 'charge'`,
-          [gameId]
-        );
-        const hasCharges = Number(charges.rows[0]!.count) > 0;
+        const hasCharges = gamesWithCharges.has(gameId);
 
         if (!canEditGameFee(hasCharges)) {
           updated.push({ gameId, success: false, reason: "Game has charges or is synced/cancelled" });
           continue;
         }
 
-        // Update the game fee
-        await client.query(
-          `UPDATE games SET fee_cents = $1, updated_at = NOW() WHERE id = $2`,
-          [body.feeCents, gameId]
-        );
+        successfulIds.push(gameId);
         updated.push({ gameId, success: true });
+      }
+
+      // 3. Perform batch update for successful games
+      if (successfulIds.length > 0) {
+        await client.query(
+          `UPDATE games SET fee_cents = $1, updated_at = NOW() WHERE id = ANY($2)`,
+          [body.feeCents, successfulIds]
+        );
       }
 
       return updated;
